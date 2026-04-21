@@ -1,0 +1,51 @@
+experiment_name: 20260421_full_evouna_example
+datasets:
+  - name: evouna_tq
+    path: data/EVOUNA/TQ.json
+  - name: evouna_nq
+    path: data/EVOUNA/NQ.json
+
+filter:
+  improper: false
+  exclude_non_boolean_labels: true
+  exclude_empty_candidate_answers: true
+
+judge_models:
+  - name: perfect_dummy
+    provider: dummy
+    metadata:
+      dummy_strategy: heuristic
+      model_family: dummy
+  - name: invalid_dummy
+    provider: dummy
+    metadata:
+      dummy_strategy: invalid
+      model_family: dummy
+
+evaluation:
+  prompt_templates:
+    - minimal
+    - guideline
+    - guideline_with_examples
+  retry_count: 1
+  invalid_output_policy: store_invalid
+  bootstrap_iterations: 50
+  enable_prompt_sensitivity: true
+  enable_reference_order_sensitivity: true
+  enable_dummy_answer_test: true
+  dummy_answer_values:
+    - "Yes"
+    - "No"
+    - "I do not know"
+
+output:
+  dir: outputs/20260421_full_evouna_example
+  save_raw_predictions: true
+  save_report: true
+
+telemetry:
+  enabled: false
+  provider: null
+  project_name: meta-judge-eval
+  dataset_name: meta-judge-eval
+  space: ${ARIZE_SPACE_ID}
