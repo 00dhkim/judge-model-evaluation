@@ -12,9 +12,21 @@ from judge_eval.settings import ARIZE_ENV_VARS, PROMPT_TEMPLATES
 from judge_eval.utils import stable_hash
 
 
+class SamplingConfig(BaseModel):
+    sample_size: int | None = None
+    seed: int | None = None
+
+    @model_validator(mode="after")
+    def validate_seed_requires_size(self) -> "SamplingConfig":
+        if self.seed is not None and self.sample_size is None:
+            raise ValueError("sampling.seed requires sampling.sample_size to be set")
+        return self
+
+
 class DatasetConfig(BaseModel):
     name: str
     path: str
+    sampling: SamplingConfig | None = None
 
 
 class FilterConfig(BaseModel):

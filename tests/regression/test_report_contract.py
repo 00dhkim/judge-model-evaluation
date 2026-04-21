@@ -13,6 +13,9 @@ def test_report_contains_required_sections(tmp_path: Path):
                 "datasets:",
                 "  - name: evouna_tq",
                 "    path: data/EVOUNA/TQ.json",
+                "    sampling:",
+                "      sample_size: 15",
+                "      seed: 7",
                 "judge_models:",
                 "  - name: heuristic_dummy",
                 "    provider: dummy",
@@ -29,8 +32,8 @@ def test_report_contains_required_sections(tmp_path: Path):
         encoding="utf-8",
     )
     for command in [
-        ["uv", "run", "judge-eval", "prepare-data", str(config), "--sample-size", "15", "--seed", "7"],
-        ["uv", "run", "judge-eval", "run", str(config), "--sample-size", "15", "--seed", "7"],
+        ["uv", "run", "judge-eval", "prepare-data", str(config)],
+        ["uv", "run", "judge-eval", "run", str(config)],
         ["uv", "run", "judge-eval", "metrics", str(out), "--bootstrap-iterations", "5"],
         ["uv", "run", "judge-eval", "report", str(out)],
     ]:

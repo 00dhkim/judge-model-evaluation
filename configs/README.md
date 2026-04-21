@@ -30,13 +30,20 @@ uv run judge-eval run configs/my_experiment.yaml
 |---|---|---|---|
 | `name` | string | 필수 | 데이터셋 식별자. 출력 파일의 `dataset` 컬럼에 기록됩니다. |
 | `path` | string | 필수 | JSON 파일 경로. 프로젝트 루트 기준 상대경로 또는 절대경로. |
+| `sampling` | object | 선택 | 이 데이터셋에만 적용할 샘플링 설정. 최상위 `sampling`보다 우선합니다. 데이터 개수에 따른 점진적 포함을 보장합니다. |
 
 ```yaml
 datasets:
   - name: evouna_tq
     path: data/EVOUNA/TQ.json
+    sampling:
+      sample_size: 500
+      seed: 42
   - name: evouna_nq
     path: data/EVOUNA/NQ.json
+    sampling:
+      sample_size: 1000
+      seed: 42
 ```
 
 ---

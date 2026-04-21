@@ -2,8 +2,14 @@ experiment_name: multi_provider_comparison
 datasets:
   - name: evouna_tq
     path: data/EVOUNA/TQ.json
+    sampling:
+      sample_size: 500
+      seed: 42
   - name: evouna_nq
     path: data/EVOUNA/NQ.json
+    sampling:
+      sample_size: 500
+      seed: 42
 
 filter:
   improper: false

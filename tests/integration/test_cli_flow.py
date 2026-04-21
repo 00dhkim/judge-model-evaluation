@@ -13,6 +13,9 @@ def test_cli_flow(tmp_path: Path):
                 "datasets:",
                 "  - name: evouna_tq",
                 "    path: data/EVOUNA/TQ.json",
+                "    sampling:",
+                "      sample_size: 20",
+                "      seed: 1",
                 "filter:",
                 "  improper: false",
                 "judge_models:",
@@ -32,8 +35,8 @@ def test_cli_flow(tmp_path: Path):
     )
     commands = [
         ["uv", "run", "judge-eval", "validate-config", str(config_path)],
-        ["uv", "run", "judge-eval", "prepare-data", str(config_path), "--sample-size", "20", "--seed", "1"],
-        ["uv", "run", "judge-eval", "run", str(config_path), "--sample-size", "20", "--seed", "1"],
+        ["uv", "run", "judge-eval", "prepare-data", str(config_path)],
+        ["uv", "run", "judge-eval", "run", str(config_path)],
         ["uv", "run", "judge-eval", "metrics", str(output_dir), "--bootstrap-iterations", "10"],
         ["uv", "run", "judge-eval", "report", str(output_dir)],
     ]

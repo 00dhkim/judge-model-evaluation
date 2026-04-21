@@ -41,14 +41,21 @@ def sample_id(dataset: str, row_index: int, answer_source: str) -> str:
     return stable_hash({"dataset": dataset, "row_index": row_index, "answer_source": answer_source})[:16]
 
 
+def _apply_sampling(rows: list[dict[str, Any]], sample_size: int | None, seed: int | None) -> list[dict[str, Any]]:
+    if sample_size and sample_size < len(rows):
+        rng = random.Random(seed)
+        rng.shuffle(rows)
+        rows = rows[:sample_size]
+        rows.sort(key=lambda item: item["sample_id"])
+    return rows
+
+
 def load_evouna_samples(
     config: ExperimentConfig,
-    sample_size: int | None = None,
-    seed: int | None = None,
     answer_sources: list[str] | None = None,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     requested_sources = answer_sources or list(ANSWER_SOURCES)
-    rows: list[dict[str, Any]] = []
+    all_rows: list[dict[str, Any]] = []
     filter_meta = {
         "exclude_improper": not config.filter.improper,
         "exclude_non_boolean_labels": config.filter.exclude_non_boolean_labels,
@@ -57,6 +64,7 @@ def load_evouna_samples(
     for dataset_config in config.datasets:
         dataset_name = dataset_config.name.replace("evouna_", "").upper()
         dataset_rows = read_json(Path(dataset_config.path))
+        rows: list[dict[str, Any]] = []
         for row_index, row in enumerate(dataset_rows):
             improper = bool(row.get("improper", False))
             if improper and not config.filter.improper:
@@ -87,11 +95,10 @@ def load_evouna_samples(
                         "source_judge_field": f"judge_{source}",
                     }
                 )
-    if sample_size and sample_size < len(rows):
-        rng = random.Random(seed)
-        rows = rng.sample(rows, sample_size)
-        rows.sort(key=lambda item: item["sample_id"])
-    frame = pd.DataFrame(rows)
+        if dataset_config.sampling is not None:
+            rows = _apply_sampling(rows, dataset_config.sampling.sample_size, dataset_config.sampling.seed)
+        all_rows.extend(rows)
+    frame = pd.DataFrame(all_rows)
     dataset_hash = stable_hash({"rows": frame.to_dict(orient="records"), "filters": filter_meta})
     meta = {
         "dataset_hash": dataset_hash,

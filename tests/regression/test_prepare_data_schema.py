@@ -8,7 +8,7 @@ from judge_eval.data import load_evouna_samples
 
 def test_prepare_data_schema_snapshot():
     config, _ = load_config(Path("configs/examples/full_evouna.yaml"))
-    frame, meta = load_evouna_samples(config, sample_size=5, seed=42)
+    frame, meta = load_evouna_samples(config)
     assert list(frame.columns) == [
         "sample_id",
         "dataset",
@@ -25,5 +25,5 @@ def test_prepare_data_schema_snapshot():
         "source_answer_field",
         "source_judge_field",
     ]
-    assert meta["row_count"] == 5
+    assert meta["row_count"] > 0
     assert pd.Series(frame["sample_id"]).is_unique

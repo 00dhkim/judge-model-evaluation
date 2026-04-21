@@ -32,7 +32,7 @@ def cmd_validate_config(args: argparse.Namespace) -> int:
 
 def cmd_prepare_data(args: argparse.Namespace) -> int:
     config, _ = load_config(args.config)
-    frame, meta = load_evouna_samples(config, sample_size=args.sample_size, seed=args.seed)
+    frame, meta = load_evouna_samples(config)
     output_dir = prepare_output_dir(config.output.dir)
     frame.to_parquet(output_dir / "normalized_samples.parquet", index=False)
     write_resolved_config(output_dir / "config.resolved.yaml", resolved_config_with_redactions(args.config))
@@ -49,7 +49,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         samples = pd.read_parquet(normalized_path)
         dataset_hash = ""
     else:
-        samples, meta = load_evouna_samples(config, sample_size=args.sample_size, seed=args.seed)
+        samples, meta = load_evouna_samples(config)
         dataset_hash = meta["dataset_hash"]
         samples.to_parquet(normalized_path, index=False)
     if not dataset_hash:
@@ -119,14 +119,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     prepare_parser = subparsers.add_parser("prepare-data")
     prepare_parser.add_argument("config")
-    prepare_parser.add_argument("--sample-size", type=int, default=None)
-    prepare_parser.add_argument("--seed", type=int, default=None)
     prepare_parser.set_defaults(func=cmd_prepare_data)
 
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("config")
-    run_parser.add_argument("--sample-size", type=int, default=None)
-    run_parser.add_argument("--seed", type=int, default=None)
     run_parser.add_argument("--resume", action="store_true")
     run_parser.set_defaults(func=cmd_run)
 
