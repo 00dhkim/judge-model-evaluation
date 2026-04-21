@@ -1,4 +1,4 @@
-experiment_name: 20260421_openai_judge_example
+experiment_name: openai_judge_example
 datasets:
   - name: evouna_tq
     path: data/EVOUNA/TQ.json
@@ -38,13 +38,9 @@ evaluation:
   enable_prompt_sensitivity: true
   enable_reference_order_sensitivity: true
   enable_dummy_answer_test: true
-  dummy_answer_values:
-    - "Yes"
-    - "No"
-    - "I do not know"
 
 output:
-  dir: outputs/20260421_openai_judge_example
+  experiment_name: openai_judge_example
   save_raw_predictions: true
   save_report: true
 
