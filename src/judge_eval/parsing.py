@@ -11,6 +11,10 @@ BOOL_RE = re.compile(r"\b(true|false|correct|incorrect)\b", re.IGNORECASE)
 
 def parse_model_output(raw_output: str) -> dict[str, Any]:
     text = raw_output.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[^\n]*\n?", "", text)
+        text = re.sub(r"\n?```$", "", text.rstrip())
+        text = text.strip()
     try:
         payload = json.loads(text)
         label = payload.get("label")
