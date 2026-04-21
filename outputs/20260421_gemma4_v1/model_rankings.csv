@@ -1,0 +1,12 @@
+ranking_name,judge_model,prompt_template,rank,metric_column,metric_value
+primary_scotts_pi,google-gemma-4-E2B-it,minimal,1,scotts_pi,-0.2121212121212118
+percent_agreement,google-gemma-4-E2B-it,minimal,1,percent_agreement,0.65
+absolute_score_gap,google-gemma-4-E2B-it,minimal,1,score_delta,0.35
+false_positive_rate,google-gemma-4-E2B-it,minimal,1,fpr,1.0
+false_negative_rate,google-gemma-4-E2B-it,minimal,1,fnr,0.0
+precision,google-gemma-4-E2B-it,minimal,1,precision,0.65
+recall,google-gemma-4-E2B-it,minimal,1,recall,1.0
+f1,google-gemma-4-E2B-it,minimal,1,f1,0.787878787878788
+prompt_sensitivity,google-gemma-4-E2B-it,,1,label_flip_rate,0.19999999999999998
+dummy_answer_robustness,google-gemma-4-E2B-it,,1,robustness_accuracy,0.22999999999999998
+reference_order_sensitivity,google-gemma-4-E2B-it,,1,label_flip_rate_by_reference_order,0.07692307692307693

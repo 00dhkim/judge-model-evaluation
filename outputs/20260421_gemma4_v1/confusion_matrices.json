@@ -1,0 +1,10 @@
+[
+  {
+    "judge_model":"google-gemma-4-E2B-it",
+    "prompt_template":"minimal",
+    "tp":13,
+    "fp":7,
+    "tn":0,
+    "fn":0
+  }
+]

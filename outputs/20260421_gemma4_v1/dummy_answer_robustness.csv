@@ -1,0 +1,6 @@
+judge_model,dummy_class,rows,valid_rows,expected_label,robustness_accuracy,rejection_rate,yes_no_caution_count
+google-gemma-4-E2B-it,empty,20,20,False,0.0,0.0,0
+google-gemma-4-E2B-it,gold_answer_verbatim,20,20,True,0.95,0.0,0
+google-gemma-4-E2B-it,repeat_question,20,20,False,0.05,0.05,0
+google-gemma-4-E2B-it,sure,20,20,False,0.0,0.0,0
+google-gemma-4-E2B-it,yes,20,20,False,0.15,0.15,0

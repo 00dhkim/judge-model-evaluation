@@ -1,0 +1,4 @@
+judge_model,prompt_left,prompt_right,prompt_consistency,scotts_pi_by_prompt,metric_delta_between_prompts,label_flip_rate
+google-gemma-4-E2B-it,guideline,guideline_with_examples,0.7,0.5698924731182794,0.15000000000000002,0.15
+google-gemma-4-E2B-it,guideline,minimal,0.7,-0.0810810810810818,-0.15000000000000002,0.15
+google-gemma-4-E2B-it,guideline_with_examples,minimal,0.7,-0.17647058823529377,-0.30000000000000004,0.3
