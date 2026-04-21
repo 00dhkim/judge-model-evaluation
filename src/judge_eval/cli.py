@@ -7,7 +7,14 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from judge_eval.config import config_hash, load_config, resolved_config_with_redactions, validate_config_file
+from judge_eval.config import (
+    config_hash,
+    load_config,
+    resolve_output_dir,
+    resolved_config_with_redactions,
+    validate_config_file,
+    write_output_dir_manifest,
+)
 from judge_eval.data import load_evouna_samples
 from judge_eval.metrics import write_metrics_bundle
 from judge_eval.reporting import generate_report
@@ -18,7 +25,6 @@ from judge_eval.telemetry import (
     sync_ax_dataset,
     write_telemetry_manifest,
 )
-
 
 def cmd_validate_config(args: argparse.Namespace) -> int:
     errors = validate_config_file(args.config)
@@ -32,8 +38,10 @@ def cmd_validate_config(args: argparse.Namespace) -> int:
 
 def cmd_prepare_data(args: argparse.Namespace) -> int:
     config, _ = load_config(args.config)
+    config_hash_value = config_hash(args.config)
     frame, meta = load_evouna_samples(config)
-    output_dir = prepare_output_dir(config.output.dir)
+    output_dir = prepare_output_dir(resolve_output_dir(config, config_hash_value))
+    write_output_dir_manifest(output_dir, config, config_hash_value)
     frame.to_parquet(output_dir / "normalized_samples.parquet", index=False)
     write_resolved_config(output_dir / "config.resolved.yaml", resolved_config_with_redactions(args.config))
     (output_dir / "dataset_meta.yaml").write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8")
@@ -43,7 +51,9 @@ def cmd_prepare_data(args: argparse.Namespace) -> int:
 
 def cmd_run(args: argparse.Namespace) -> int:
     config, _ = load_config(args.config)
-    output_dir = prepare_output_dir(config.output.dir)
+    config_hash_value = config_hash(args.config)
+    output_dir = prepare_output_dir(resolve_output_dir(config, config_hash_value))
+    write_output_dir_manifest(output_dir, config, config_hash_value)
     normalized_path = output_dir / "normalized_samples.parquet"
     if normalized_path.exists():
         samples = pd.read_parquet(normalized_path)
@@ -60,7 +70,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         config=config,
         normalized_samples=samples,
         output_dir=output_dir,
-        config_hash_value=config_hash(args.config),
+        config_hash_value=config_hash_value,
         dataset_hash=dataset_hash,
         resolved_config=resolved_config_with_redactions(args.config),
         resume=args.resume,

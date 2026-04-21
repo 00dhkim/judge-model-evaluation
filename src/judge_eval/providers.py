@@ -7,6 +7,7 @@ from typing import Any
 
 _RATE_LIMIT_MAX_RETRIES = 10
 _RATE_LIMIT_BASE_DELAY = 1.0
+_HF_LOCAL_PIPELINES: dict[str, Any] = {}
 
 import requests
 
@@ -145,10 +146,13 @@ def _call_hf_local_provider(model: ModelConfig, prompt: str) -> ProviderResponse
         raise ProviderError(
             "hf_local provider requires the optional 'transformers' dependency"
         ) from exc
-    generator = pipeline(
-        "text-generation",
-        model=model.model_path or model.model,
-    )
+    model_id = model.model_path or model.model
+    if model_id is None:
+        raise ProviderError("hf_local provider requires model or model_path")
+    generator = _HF_LOCAL_PIPELINES.get(model_id)
+    if generator is None:
+        generator = pipeline("text-generation", model=model_id)
+        _HF_LOCAL_PIPELINES[model_id] = generator
     outputs = generator(prompt, max_new_tokens=model.max_tokens, temperature=model.temperature)
     if not outputs or "generated_text" not in outputs[0]:
         raise ProviderError("hf_local provider did not return generated_text")

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import json
 import os
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -10,6 +10,8 @@ from pydantic import BaseModel, Field, ValidationError, computed_field, model_va
 
 from judge_eval.settings import ARIZE_ENV_VARS, PROMPT_TEMPLATES
 from judge_eval.utils import stable_hash
+
+OUTPUT_DIR_MANIFEST_NAME = ".judge_eval_output.json"
 
 
 class SamplingConfig(BaseModel):
@@ -87,6 +89,8 @@ class OutputConfig(BaseModel):
     @computed_field
     @property
     def dir(self) -> str:
+        from datetime import datetime
+
         date = datetime.now().strftime("%Y%m%d")
         return f"{self.base_dir}/{date}_{self.experiment_name}"
 
@@ -157,10 +161,6 @@ def _validate_telemetry_env(config: ExperimentConfig) -> None:
 def resolved_config_with_redactions(path: str | Path) -> dict[str, Any]:
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     resolved = _resolve_data(raw)
-    for model in resolved.get("judge_models", []):
-        api_key_env = model.get("api_key_env")
-        if api_key_env:
-            model["api_key"] = "<redacted-env>"
     if resolved.get("telemetry", {}).get("enabled"):
         resolved["telemetry"]["env_refs"] = list(ARIZE_ENV_VARS)
     return resolved
@@ -181,3 +181,31 @@ def validate_config_file(path: str | Path) -> list[str]:
         else:
             errors.append(str(exc))
     return errors
+
+
+def find_materialized_output_dir(config: ExperimentConfig, config_hash_value: str) -> Path | None:
+    base_dir = Path(config.output.base_dir)
+    if not base_dir.exists():
+        return None
+    pattern = f"*_{config.output.experiment_name}/{OUTPUT_DIR_MANIFEST_NAME}"
+    for manifest_path in sorted(base_dir.glob(pattern), reverse=True):
+        try:
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if payload.get("config_hash") == config_hash_value and payload.get("experiment_name") == config.output.experiment_name:
+            return manifest_path.parent
+    return None
+
+
+def resolve_output_dir(config: ExperimentConfig, config_hash_value: str) -> Path:
+    return find_materialized_output_dir(config, config_hash_value) or Path(config.output.dir)
+
+
+def write_output_dir_manifest(output_dir: Path, config: ExperimentConfig, config_hash_value: str) -> None:
+    payload = {
+        "experiment_name": config.output.experiment_name,
+        "config_hash": config_hash_value,
+        "output_dir": str(output_dir),
+    }
+    (output_dir / OUTPUT_DIR_MANIFEST_NAME).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

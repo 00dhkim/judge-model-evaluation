@@ -187,6 +187,15 @@ def compute_variant_analysis(frame: pd.DataFrame, variant_type: str) -> pd.DataF
     return pd.DataFrame(rows)
 
 
+def _template_rank(template: str) -> int:
+    from judge_eval.settings import PROMPT_TEMPLATES
+
+    try:
+        return list(PROMPT_TEMPLATES).index(template)
+    except ValueError:
+        return len(PROMPT_TEMPLATES)
+
+
 def compute_prompt_sensitivity(frame: pd.DataFrame) -> pd.DataFrame:
     prompt_rows = frame[frame["variant_type"] == "prompt_sensitivity"].copy()
     if prompt_rows.empty:
@@ -215,7 +224,7 @@ def compute_prompt_sensitivity(frame: pd.DataFrame) -> pd.DataFrame:
         consistency = float((pivot.nunique(axis=1) <= 1).mean())
         for left in pivot.columns:
             for right in pivot.columns:
-                if left >= right:
+                if _template_rank(left) >= _template_rank(right):
                     continue
                 pair = pivot[[left, right]].dropna()
                 if pair.empty:
@@ -238,27 +247,39 @@ def compute_prompt_sensitivity(frame: pd.DataFrame) -> pd.DataFrame:
 
 def compute_reference_order_sensitivity(frame: pd.DataFrame) -> pd.DataFrame:
     rows = []
+    base = frame[frame["variant_type"] == "base"].copy()
     variants = frame[frame["variant_type"] == "reference_order"].copy()
-    if variants.empty:
+    if base.empty:
         return pd.DataFrame(
             columns=[
                 "judge_model",
                 "reference_order_consistency",
                 "label_flip_rate_by_reference_order",
+                "eligible_sample_groups",
+                "skipped_single_alias_groups",
+                "coverage",
                 "rows",
                 "valid_rows",
             ]
         )
-    for judge_model, group in variants.groupby("judge_model"):
+    variant_groups = {judge_model: group for judge_model, group in variants.groupby("judge_model")}
+    for judge_model, base_group in base.groupby("judge_model"):
+        unique_samples = base_group[["variant_group", "golden_answer_alias_count"]].drop_duplicates()
+        eligible_groups = int((unique_samples["golden_answer_alias_count"] > 1).sum())
+        skipped_groups = int((unique_samples["golden_answer_alias_count"] <= 1).sum())
+        group = variant_groups.get(judge_model, pd.DataFrame(columns=variants.columns))
         valid = group[group["parsed_label"].notna()]
         grouped = valid.groupby("variant_group")["parsed_label"]
-        consistency = float((grouped.nunique() <= 1).mean()) if len(valid) else 0.0
-        flip_rate = float((grouped.nunique() > 1).mean()) if len(valid) else 0.0
+        consistency = float((grouped.nunique() <= 1).mean()) if len(valid) else None
+        flip_rate = float((grouped.nunique() > 1).mean()) if len(valid) else None
         rows.append(
             {
                 "judge_model": judge_model,
                 "reference_order_consistency": consistency,
                 "label_flip_rate_by_reference_order": flip_rate,
+                "eligible_sample_groups": eligible_groups,
+                "skipped_single_alias_groups": skipped_groups,
+                "coverage": float(eligible_groups / len(unique_samples)) if len(unique_samples) else 0.0,
                 "rows": len(group),
                 "valid_rows": len(valid),
             }
@@ -312,13 +333,18 @@ def compute_dummy_answer_robustness(frame: pd.DataFrame) -> pd.DataFrame:
 
 def write_metrics_bundle(parsed: pd.DataFrame, output_dir: Path, bootstrap_iterations: int) -> None:
     base = parsed[parsed["variant_type"] == "base"].copy()
-    overall = summarize_metrics(base, ["judge_model", "prompt_template"])
-    by_dataset = summarize_metrics(base, ["judge_model", "dataset"])
-    by_answer_source = summarize_metrics(base, ["judge_model", "answer_source"])
-    by_human_label = summarize_metrics(base, ["judge_model", "human_label"])
-    by_length = summarize_metrics(base, ["judge_model", "answer_length_bucket"])
-    by_alias_count = summarize_metrics(base, ["judge_model", "golden_answer_alias_count"])
-    by_model_family = summarize_metrics(base, ["judge_model", "model_family"])
+    # prompt_sensitivity rows cover all configured templates; use them for per-template metrics
+    # when available, otherwise fall back to base (which only uses the first template)
+    prompt_sens_rows = parsed[parsed["variant_type"] == "prompt_sensitivity"].copy()
+    metric_source = prompt_sens_rows if not prompt_sens_rows.empty else base
+    metric_dimensions = ["judge_model", "prompt_template"]
+    overall = summarize_metrics(metric_source, metric_dimensions)
+    by_dataset = summarize_metrics(metric_source, metric_dimensions + ["dataset"])
+    by_answer_source = summarize_metrics(metric_source, metric_dimensions + ["answer_source"])
+    by_human_label = summarize_metrics(metric_source, metric_dimensions + ["human_label"])
+    by_length = summarize_metrics(metric_source, metric_dimensions + ["answer_length_bucket"])
+    by_alias_count = summarize_metrics(metric_source, metric_dimensions + ["golden_answer_alias_count"])
+    by_model_family = summarize_metrics(metric_source, metric_dimensions + ["model_family"])
     overall.to_csv(output_dir / "metrics_overall.csv", index=False)
     by_dataset.to_csv(output_dir / "metrics_by_dataset.csv", index=False)
     by_answer_source.to_csv(output_dir / "metrics_by_answer_source.csv", index=False)
@@ -382,8 +408,9 @@ def write_metrics_bundle(parsed: pd.DataFrame, output_dir: Path, bootstrap_itera
                     "metric_value": item["robustness_accuracy"],
                 }
             )
-    if not reference_order.empty:
-        ref_rank = reference_order.sort_values(
+    reference_rank_source = reference_order.dropna(subset=["label_flip_rate_by_reference_order"])
+    if not reference_rank_source.empty:
+        ref_rank = reference_rank_source.sort_values(
             ["label_flip_rate_by_reference_order", "judge_model"],
             ascending=[True, True],
         ).reset_index(drop=True)

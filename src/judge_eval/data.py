@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -61,6 +62,7 @@ def load_evouna_samples(
         "exclude_non_boolean_labels": config.filter.exclude_non_boolean_labels,
         "exclude_empty_candidate_answers": config.filter.exclude_empty_candidate_answers,
     }
+    non_boolean_label_count = 0
     for dataset_config in config.datasets:
         dataset_name = dataset_config.name.replace("evouna_", "").upper()
         dataset_rows = read_json(Path(dataset_config.path))
@@ -77,6 +79,8 @@ def load_evouna_samples(
                     continue
                 if config.filter.exclude_empty_candidate_answers and is_empty_candidate(candidate):
                     continue
+                if not config.filter.exclude_non_boolean_labels and human_label is None:
+                    non_boolean_label_count += 1
                 rows.append(
                     {
                         "sample_id": sample_id(dataset_name, row_index, source),
@@ -106,4 +110,10 @@ def load_evouna_samples(
         "filter_policy": filter_meta,
         "answer_sources": requested_sources,
     }
+    if non_boolean_label_count:
+        warnings.warn(
+            "exclude_non_boolean_labels=false keeps rows with non-boolean human labels; "
+            f"{non_boolean_label_count} rows will be coerced to False in normalized_samples.",
+            stacklevel=2,
+        )
     return frame, meta

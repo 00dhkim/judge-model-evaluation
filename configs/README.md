@@ -55,7 +55,7 @@ datasets:
 | 필드 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
 | `improper` | bool | `false` | `true`로 설정하면 improper 플래그가 붙은 샘플을 **포함**합니다. `false`이면 제외합니다. |
-| `exclude_non_boolean_labels` | bool | `true` | true/false 외의 레이블을 가진 샘플을 제외합니다. |
+| `exclude_non_boolean_labels` | bool | `true` | true/false 외의 레이블을 가진 샘플을 제외합니다. 강력 권장값은 `true`입니다. `false`이면 non-boolean 레이블이 경고와 함께 `False`로 강제 변환될 수 있습니다. |
 | `exclude_empty_candidate_answers` | bool | `true` | candidate answer가 비어있는 샘플을 제외합니다. |
 
 ```yaml
@@ -144,6 +144,8 @@ vllm serve Qwen/Qwen2.5-7B-Instruct --port 8000
 ```
 
 > `transformers`와 `torch` 패키지가 필요합니다: `uv add transformers torch`
+>
+> 동일한 `hf_local` 모델은 프로세스 내에서 한 번만 로드되고 이후 호출에서 재사용됩니다.
 
 ---
 
@@ -231,7 +233,7 @@ evaluation:
 | `save_raw_predictions` | bool | 선택 | `true` | `raw_predictions.jsonl` 저장 여부. |
 | `save_report` | bool | 선택 | `true` | `report.md` 및 `plots/` 저장 여부. |
 
-실행 당일 날짜가 자동으로 prefix로 붙습니다. 예를 들어 `experiment_name: my_experiment`로 설정하면 실제 출력 디렉터리는 `outputs/20260421_my_experiment`가 됩니다.
+실행 당일 날짜가 자동으로 prefix로 붙습니다. 예를 들어 `experiment_name: my_experiment`로 설정하면 실제 출력 디렉터리는 `outputs/20260421_my_experiment`가 됩니다. 다만 `prepare-data`가 이미 출력 디렉터리를 materialize했다면, 이후 `run`은 날짜가 바뀌어도 같은 config hash의 기존 디렉터리를 재사용합니다.
 
 ```yaml
 output:

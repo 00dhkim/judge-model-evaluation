@@ -1,11 +1,11 @@
-from datetime import datetime
 from pathlib import Path
 from subprocess import run
+
+from judge_eval.config import config_hash, load_config, resolve_output_dir
 
 
 def test_cli_flow(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
-    output_dir = tmp_path / f"{datetime.now().strftime('%Y%m%d')}_out"
     config_path.write_text(
         "\n".join(
             [
@@ -33,6 +33,8 @@ def test_cli_flow(tmp_path: Path):
         ),
         encoding="utf-8",
     )
+    config, _ = load_config(config_path)
+    output_dir = resolve_output_dir(config, config_hash(config_path))
     commands = [
         ["uv", "run", "judge-eval", "validate-config", str(config_path)],
         ["uv", "run", "judge-eval", "prepare-data", str(config_path)],
@@ -43,7 +45,8 @@ def test_cli_flow(tmp_path: Path):
     for command in commands:
         completed = run(command, check=False, capture_output=True, text=True)
         assert completed.returncode == 0, completed.stderr
-    assert (output_dir / "report.md").exists()
+    assert (output_dir / ".judge_eval_output.json").exists()
+    assert (output_dir / "report.html").exists()
     assert (output_dir / "prompt_sensitivity.csv").exists()
     assert (output_dir / "reference_order_sensitivity.csv").exists()
     assert (output_dir / "dummy_answer_robustness.csv").exists()

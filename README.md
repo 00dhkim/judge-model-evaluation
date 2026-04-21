@@ -16,6 +16,7 @@ uv run judge-eval prepare-data configs/examples/gemma4.yaml
 
 # 정규화된 샘플에 대해 각 judge 모델로 LLM 호출을 수행하고, 응답을 파싱해 parsed_predictions.parquet으로 저장한다.
 # base 평가 외에 prompt sensitivity·reference order·dummy answer 등 variant 평가도 함께 실행한다.
+# prepare-data를 먼저 실행했다면, run은 기존 output 디렉터리를 재사용한다. 날짜가 바뀌어도 같은 config_hash면 이어서 쓴다.
 uv run judge-eval run configs/examples/gemma4.yaml
 
 # parsed_predictions.parquet을 읽어 Scott's Pi, F1, precision/recall, FPR/FNR, leniency bias 등
