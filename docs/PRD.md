@@ -50,11 +50,15 @@ output:
   dir: outputs/judge_eval_2026_04
   save_raw_predictions: true
   save_report: true
+
+telemetry:
+  enabled: true
+  provider: arize
 ```
 
 시스템은 EVOUNA 데이터를 읽고, 각 row를 `answer_* / judge_*` 쌍으로 펼친다. 예를 들어 하나의 row는 `answer_fid`, `answer_gpt35`, `answer_chatgpt`, `answer_gpt4`, `answer_newbing`의 5개 평가 샘플로 변환된다. EVOUNA README는 이 컬럼 구조와 `judge_*`가 human correctness label임을 명시한다. ([GitHub][2])
 
-그다음 각 judge 후보 모델에게 다음 입력을 준다. 출력은 structured output으로 true 또는 false로만 강제한다.
+그다음 각 judge 후보 모델에게 다음 입력을 준다. 출력은 structured output으로 reason을 먼저, label을 나중에 내도록 강제한다.
 
 ```text
 Question:
@@ -69,10 +73,10 @@ Candidate answer:
 Task:
 Determine whether the candidate answer correctly answers the question.
 Return only JSON:
-{"label": true} or {"label": false}
+{"reason": "brief explanation", "label": true} or {"reason": "brief explanation", "label": false}
 ```
 
-출력된 `label`을 EVOUNA의 human label인 `judge_*`와 비교하여 성능을 계산한다.
+출력된 `reason`과 `label`을 모두 저장하되, 성능 계산은 `label`을 EVOUNA의 human label인 `judge_*`와 비교하여 수행한다.
 
 ### 5. 데이터 요구사항
 
@@ -97,13 +101,15 @@ Return only JSON:
 
 ### 6. 시스템 입력
 
-시스템은 세 가지 입력을 받는다.
+시스템은 네 가지 입력을 받는다.
 
 첫째, judge model 목록이다. 각 모델은 `name`, `provider`, `endpoint`, `model`, `model_path`, `api_key_env`, `temperature`, `max_tokens`를 가질 수 있다.
 
 둘째, dataset 설정이다. 기본값은 `EVOUNA/TQ.json`과 `EVOUNA/NQ.json`이다. 사용자는 `TQ only`, `NQ only`, `sample_size`, `seed`, `answer_sources`를 지정할 수 있어야 한다.
 
 셋째, evaluation 설정이다. prompt template, retry 횟수, output parser, invalid output 처리 방식, metric list, bootstrap 반복 횟수, prompt sensitivity test 여부, dummy answer test 여부를 받는다.
+
+넷째, observability 설정이다. OpenTelemetry tracing on/off와 experiment naming rule을 받는다. Arize 인증은 설정 파일에서 env 이름을 다시 받지 않고, 프로세스 환경의 `ARIZE_API_KEY`, `ARIZE_SPACE_ID`를 고정적으로 사용한다. 둘 중 하나라도 없으면 설정 검증 단계에서 에러를 발생시켜야 한다.
 
 ### 7. 시스템 출력
 
@@ -115,19 +121,21 @@ outputs/{experiment_name}/
   normalized_samples.parquet
   raw_predictions.jsonl
   parsed_predictions.parquet
+  telemetry_manifest.json
   metrics_overall.csv
   metrics_by_dataset.csv
   metrics_by_answer_source.csv
   confusion_matrices.json
   scotts_pi.csv
   prompt_sensitivity.csv
+  reference_order_sensitivity.csv
   dummy_answer_robustness.csv
   leniency_bias.csv
   model_rankings.csv
   report.md
 ```
 
-`report.md`에는 Judge 모델 별 성능 그래프(Percent Agreement, Precision, Recall, F1, Scott's Pi), 기타 수치 그래프(비용, 속도), 최종 추천 모델, 모델별 약점, 운영 투입 가능 여부, 비용/속도/성능 trade-off가 포함되어야 한다.
+`report.md`에는 Judge 모델 별 성능 그래프(Percent Agreement, Precision, Recall, F1, Scott's Pi), 기타 수치 그래프(비용, 속도), 최종 추천 모델, 모델별 약점, 운영 투입 가능 여부, 비용/속도/성능 trade-off가 포함되어야 한다. 또한 Arize에서 동일 실험의 모델별 성능 비교와 trace/span drill-down이 가능해야 한다.
 
 ### 8. 주요 기능 요구사항
 
@@ -139,9 +147,9 @@ EVOUNA JSON을 읽고 표준 평가 샘플로 펼친다. 각 row에서 `answer_f
 
 #### 8.2 Judge Model Runner
 
-각 judge 모델에 동일한 샘플을 동일한 prompt family로 넣는다. temperature는 기본 0으로 둔다. 출력은 반드시 JSON boolean으로 파싱한다.
+각 judge 모델에 동일한 샘플을 동일한 prompt family로 넣는다. temperature는 기본 0으로 둔다. 출력은 반드시 reason-first JSON으로 파싱한다.
 
-invalid output 처리 정책은 강해야 한다. `true/false`를 파싱할 수 없으면 1회 retry한다. 그래도 실패하면 `invalid`로 저장하고 워닝을 발생하며 metric 계산에서는 별도 집계한다. invalid를 임의로 false로 바꾸면 안 된다. 그건 평가 왜곡이다.
+invalid output 처리 정책은 강해야 한다. 최종 `label=true/false`를 파싱할 수 없으면 1회 retry한다. 그래도 실패하면 `invalid`로 저장하고 워닝을 발생하며 metric 계산에서는 별도 집계한다. invalid를 임의로 false로 바꾸면 안 된다. 그건 평가 왜곡이다. `reason`은 raw output과 함께 저장해야 하며, `label`보다 먼저 생성되었는지 audit 가능해야 한다.
 
 #### 8.3 Prompt Template Manager
 
@@ -161,7 +169,7 @@ invalid output 처리 정책은 강해야 한다. `true/false`를 파싱할 수 
 2차: regex parse, 예: `"label": true`, `true`, `correct`
 3차: invalid 처리
 
-단, 2차 regex parse를 허용하더라도 raw output은 반드시 저장해야 한다. 모델이 “정답은 아니지만…” 같은 설명을 길게 붙이는 경우가 있으므로, parser가 무엇을 근거로 label을 뽑았는지 audit 가능해야 한다.
+단, 2차 regex parse를 허용하더라도 raw output은 반드시 저장해야 한다. 모델이 reason을 먼저 설명하고 마지막에 label을 내도록 요구하므로, parser가 무엇을 근거로 label을 뽑았는지 audit 가능해야 한다.
 
 #### 8.5 Metric Engine
 
@@ -330,7 +338,11 @@ Secondary ranking은 다음 지표별로 각각 산출한다.
 
 장애 복구가 가능해야 한다. 각 sample-model 호출 결과를 JSONL로 append 저장하고, 실패 시 이미 완료된 sample은 skip할 수 있어야 한다.
 
+운영 관측성도 필수다. 모든 실행은 OpenTelemetry trace/span을 남겨야 하고, Arize에서 experiment 단위로 모델별 성능과 trace/span을 함께 볼 수 있어야 한다. 필요한 인증 정보는 프로세스 환경의 `ARIZE_API_KEY`, `ARIZE_SPACE_ID`를 고정적으로 사용하며, 값이 없으면 실행 전에 에러를 발생시켜야 한다.
+
 보안 측면에서는 API key를 config에 직접 저장하면 안 된다. 환경변수 참조만 허용한다. 로컬 모델 weight path는 로그에 남겨도 되지만, 외부 API key와 bearer token은 redaction해야 한다.
+
+실행 환경은 `uv`를 기준으로 한다. 프로젝트 가상환경은 `uv venv`로 만들고, CLI와 테스트는 `uv run`으로 실행한다.
 
 ### 10. 아키텍처
 
@@ -397,11 +409,14 @@ class JudgePrediction(BaseModel):
     judge_model: str
     prompt_template: str
     raw_output: str
+    judge_reason: str | None
     parsed_label: bool | None
     parse_status: Literal["ok", "retry_ok", "invalid", "error"]
     latency_ms: int | None
     input_tokens: int | None
     output_tokens: int | None
+    trace_id: str | None
+    span_id: str | None
     error_message: str | None = None
 ```
 
@@ -410,19 +425,20 @@ class JudgePrediction(BaseModel):
 최소 CLI는 다음과 같다.
 
 ```bash
-judge-eval validate-config configs/exp.yaml
-judge-eval prepare-data configs/exp.yaml
-judge-eval run configs/exp.yaml
-judge-eval metrics outputs/exp_name
-judge-eval report outputs/exp_name
+uv venv
+uv run judge-eval validate-config configs/exp.yaml
+uv run judge-eval prepare-data configs/exp.yaml
+uv run judge-eval run configs/exp.yaml
+uv run judge-eval metrics outputs/exp_name
+uv run judge-eval report outputs/exp_name
 ```
 
 샘플링 실행도 지원해야 한다.
 
 ```bash
-judge-eval run configs/exp.yaml --sample-size 200 --seed 42
-judge-eval run configs/exp.yaml --models qwen3_32b,gpt_4_1
-judge-eval run configs/exp.yaml --resume
+uv run judge-eval run configs/exp.yaml --sample-size 200 --seed 42
+uv run judge-eval run configs/exp.yaml --models qwen3_32b,gpt_4_1
+uv run judge-eval run configs/exp.yaml --resume
 ```
 
 ### 13. Report 요구사항
@@ -438,6 +454,8 @@ Most conservative judge:
 Most prompt-sensitive judge:
 Worst dummy-answer robustness:
 ```
+
+또한 telemetry 요약 섹션에는 Arize experiment 이름, 비교 대상 judge 모델 목록, 대표 trace/span 링크 규칙이 포함되어야 한다.
 
 모델별 표는 다음 컬럼을 가져야 한다.
 
@@ -467,7 +485,7 @@ rank
 
 MVP 완료 기준은 다음이다.
 
-EVOUNA TQ/NQ를 정상 로드하고, `improper=false`만 필터링할 수 있어야 한다. 각 row를 5개 candidate answer sample로 펼쳐야 한다. 최소 2개 judge 모델에 대해 end-to-end 실행이 가능해야 한다. raw output, parsed label, metric, report가 저장되어야 한다. Scott’s π, percent agreement, precision, recall, F1, confusion matrix가 계산되어야 한다.
+EVOUNA TQ/NQ를 정상 로드하고, `improper=false`만 필터링할 수 있어야 한다. 각 row를 5개 candidate answer sample로 펼쳐야 한다. 최소 2개 judge 모델에 대해 end-to-end 실행이 가능해야 한다. raw output, judge reason, parsed label, metric, report가 저장되어야 한다. Scott’s π, percent agreement, precision, recall, F1, confusion matrix가 계산되어야 한다. `uv run` 기반 실행과 기본 OpenTelemetry trace export도 동작해야 한다.
 
 MVP 이후 v1 기준은 prompt sensitivity, dummy answer robustness, leniency bias, reference order sensitivity까지 포함해야 한다.
 
