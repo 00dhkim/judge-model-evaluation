@@ -5,6 +5,9 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+_RATE_LIMIT_MAX_RETRIES = 10
+_RATE_LIMIT_BASE_DELAY = 1.0
+
 import requests
 
 from judge_eval.config import ModelConfig
@@ -87,7 +90,15 @@ def _call_chat_completion_provider(model: ModelConfig, prompt: str) -> ProviderR
         "temperature": model.temperature,
         "max_tokens": model.max_tokens,
     }
-    response = requests.post(model.endpoint, headers=headers, json=payload, timeout=120)
+    for attempt in range(_RATE_LIMIT_MAX_RETRIES + 1):
+        response = requests.post(model.endpoint, headers=headers, json=payload, timeout=120)
+        if response.status_code != 429:
+            break
+        if attempt == _RATE_LIMIT_MAX_RETRIES:
+            raise ProviderError(f"rate limit exceeded after {_RATE_LIMIT_MAX_RETRIES} retries: {response.text}")
+        retry_after = response.headers.get("Retry-After")
+        delay = float(retry_after) if retry_after and retry_after.replace(".", "", 1).isdigit() else _RATE_LIMIT_BASE_DELAY * (2**attempt)
+        time.sleep(delay)
     if response.status_code >= 400:
         raise ProviderError(f"provider call failed: {response.status_code} {response.text}")
     data = response.json()
