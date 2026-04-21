@@ -1,0 +1,52 @@
+experiment_name: 20260421_local_llm_example
+datasets:
+  - name: evouna_tq
+    path: data/EVOUNA/TQ.json
+
+filter:
+  improper: false
+  exclude_non_boolean_labels: true
+  exclude_empty_candidate_answers: true
+
+judge_models:
+  # Ollama (openai_compatible) — http://localhost:11434/v1
+  - name: ollama_llama3
+    provider: openai_compatible
+    model: llama3.2
+    endpoint: http://localhost:11434/v1/chat/completions
+    temperature: 0.0
+    max_tokens: 256
+
+  # vLLM 서버 — http://localhost:8000/v1
+  - name: vllm_qwen
+    provider: vllm
+    model: Qwen/Qwen2.5-7B-Instruct
+    endpoint: http://localhost:8000/v1/chat/completions
+    temperature: 0.0
+    max_tokens: 256
+
+  # Hugging Face 로컬 파이프라인 (GPU 필요, transformers 패키지 필요)
+  - name: hf_local_phi3
+    provider: hf_local
+    model_path: microsoft/Phi-3-mini-4k-instruct
+    temperature: 0.0
+    max_tokens: 256
+
+evaluation:
+  prompt_templates:
+    - minimal
+    - guideline
+  retry_count: 1
+  invalid_output_policy: store_invalid
+  bootstrap_iterations: 50
+  enable_prompt_sensitivity: true
+  enable_reference_order_sensitivity: true
+  enable_dummy_answer_test: false
+
+output:
+  dir: outputs/20260421_local_llm_example
+  save_raw_predictions: true
+  save_report: true
+
+telemetry:
+  enabled: false
