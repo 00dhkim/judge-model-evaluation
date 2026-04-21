@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import io
 from pathlib import Path
+import warnings
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -13,6 +14,52 @@ from pandas.errors import EmptyDataError
 from judge_eval.utils import ensure_dir
 
 matplotlib.use("Agg")
+
+# Korean font setup — register local user fonts first so matplotlib can render Hangul in saved PNGs.
+import matplotlib.font_manager as _fm
+
+
+def _configure_korean_font() -> None:
+    candidate_paths = [
+        Path.home() / ".local/share/fonts/malgun.ttf",
+        Path.home() / ".local/share/fonts/malgunbd.ttf",
+        Path.home() / ".local/share/fonts/NanumGothic.ttf",
+    ]
+    for path in candidate_paths:
+        if path.exists():
+            try:
+                _fm.fontManager.addfont(str(path))
+            except RuntimeError:
+                pass
+
+    preferred_names = [
+        "Malgun Gothic",
+        "맑은 고딕",
+        "NanumGothic",
+        "나눔고딕",
+        "Apple SD Gothic Neo",
+        "Noto Sans KR",
+        "Noto Sans CJK KR",
+        "Noto Serif CJK KR",
+    ]
+    available_names = {f.name for f in _fm.fontManager.ttflist}
+    korean_font_name = next((name for name in preferred_names if name in available_names), None)
+
+    if korean_font_name:
+        matplotlib.rcParams["font.family"] = [korean_font_name, "DejaVu Sans", "sans-serif"]
+        matplotlib.rcParams["font.sans-serif"] = [korean_font_name, "DejaVu Sans"]
+        return
+
+    warnings.warn(
+        "No Korean font found for matplotlib. Install or register a Hangul-capable font such as "
+        "Malgun Gothic or NanumGothic to avoid missing glyph warnings.",
+        UserWarning,
+        stacklevel=2,
+    )
+
+
+_configure_korean_font()
+matplotlib.rcParams["axes.unicode_minus"] = False
 
 # ---------------------------------------------------------------------------
 # Paper reference data (Bavaresco et al., 2024 — "Judging the Judges",
@@ -126,6 +173,13 @@ def _safe_read_csv(path: Path) -> pd.DataFrame:
         return pd.DataFrame()
 
 
+def _safe_read_parquet(path: Path) -> pd.DataFrame:
+    try:
+        return pd.read_parquet(path)
+    except (FileNotFoundError, OSError, ValueError, ImportError):
+        return pd.DataFrame()
+
+
 def _fig_to_base64(fig: plt.Figure) -> str:
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=120, bbox_inches="tight")
@@ -161,6 +215,110 @@ def _html_table(frame: pd.DataFrame) -> str:
     for row in frame.fillna("").astype(str).itertuples(index=False, name=None):
         rows_html += "<tr>" + "".join(f"<td>{v}</td>" for v in row) + "</tr>"
     return f"<table><thead><tr>{header}</tr></thead><tbody>{rows_html}</tbody></table>"
+
+
+def _format_int(value: int | float | None) -> str:
+    if value is None or pd.isna(value):
+        return "n/a"
+    return f"{int(value):,}"
+
+
+def _format_pct(value: float | None, digits: int = 1) -> str:
+    if value is None or pd.isna(value):
+        return "n/a"
+    return f"{value:.{digits}%}"
+
+
+def _format_ms(value: float | None) -> str:
+    if value is None or pd.isna(value):
+        return "n/a"
+    return f"{value:,.0f} ms"
+
+
+def _dataset_summary(dataset_meta: dict, normalized_samples: pd.DataFrame, metrics_by_dataset: pd.DataFrame) -> str:
+    dataset_names: list[str] = []
+    if "dataset" in normalized_samples.columns and not normalized_samples.empty:
+        dataset_names = sorted(normalized_samples["dataset"].dropna().astype(str).unique().tolist())
+    elif "dataset" in metrics_by_dataset.columns and not metrics_by_dataset.empty:
+        dataset_names = sorted(metrics_by_dataset["dataset"].dropna().astype(str).unique().tolist())
+
+    if not dataset_names:
+        return "n/a"
+    return f"{len(dataset_names)}개 ({', '.join(dataset_names)})"
+
+
+def _answer_source_summary(dataset_meta: dict, normalized_samples: pd.DataFrame) -> str:
+    sources = dataset_meta.get("answer_sources")
+    if isinstance(sources, list) and sources:
+        source_names = [str(source) for source in sources]
+    elif "answer_source" in normalized_samples.columns and not normalized_samples.empty:
+        source_names = sorted(normalized_samples["answer_source"].dropna().astype(str).unique().tolist())
+    else:
+        source_names = []
+
+    if not source_names:
+        return "n/a"
+    return f"{len(source_names)}개 ({', '.join(source_names)})"
+
+
+def _experiment_overview_items(
+    dataset_meta: dict,
+    normalized_samples: pd.DataFrame,
+    parsed_predictions: pd.DataFrame,
+    metrics: pd.DataFrame,
+    metrics_by_dataset: pd.DataFrame,
+) -> list[tuple[str, str]]:
+    base_predictions = (
+        parsed_predictions.loc[parsed_predictions["variant_type"].eq("base")].copy()
+        if "variant_type" in parsed_predictions.columns
+        else parsed_predictions.copy()
+    )
+
+    total_samples = None
+    if isinstance(dataset_meta.get("row_count"), (int, float)):
+        total_samples = int(dataset_meta["row_count"])
+    elif not normalized_samples.empty:
+        total_samples = len(normalized_samples)
+
+    question_count = None
+    if "question" in normalized_samples.columns and not normalized_samples.empty:
+        question_count = normalized_samples["question"].dropna().nunique()
+    elif "sample_id" in normalized_samples.columns and not normalized_samples.empty:
+        question_count = normalized_samples["sample_id"].dropna().nunique()
+
+    judge_config_count = None
+    if {"judge_model", "prompt_template"}.issubset(metrics.columns) and not metrics.empty:
+        judge_config_count = metrics[["judge_model", "prompt_template"]].drop_duplicates().shape[0]
+
+    human_positive_rate = None
+    if "human_label" in normalized_samples.columns and not normalized_samples.empty:
+        human_positive_rate = normalized_samples["human_label"].astype(bool).mean()
+
+    valid_rate = None
+    if "parse_status" in base_predictions.columns and not base_predictions.empty:
+        valid_rate = base_predictions["parse_status"].eq("ok").mean()
+    elif "valid_rate" in metrics.columns and not metrics.empty:
+        valid_rate = metrics["valid_rate"].mean()
+
+    p50_latency = None
+    p95_latency = None
+    if "latency_ms" in base_predictions.columns and not base_predictions.empty:
+        p50_latency = float(base_predictions["latency_ms"].dropna().quantile(0.50))
+        p95_latency = float(base_predictions["latency_ms"].dropna().quantile(0.95))
+    elif {"p50_latency_ms", "p95_latency_ms"}.issubset(metrics.columns) and not metrics.empty:
+        p50_latency = float(metrics["p50_latency_ms"].dropna().median())
+        p95_latency = float(metrics["p95_latency_ms"].dropna().median())
+
+    return [
+        ("총 평가 샘플", _format_int(total_samples)),
+        ("고유 질문 수", _format_int(question_count)),
+        ("답변 소스 구성", _answer_source_summary(dataset_meta, normalized_samples)),
+        ("데이터셋 구성", _dataset_summary(dataset_meta, normalized_samples, metrics_by_dataset)),
+        ("평가 judge 설정 수", _format_int(judge_config_count)),
+        ("인간 기준 정답 비율", _format_pct(human_positive_rate)),
+        ("유효 판정률(base)", _format_pct(valid_rate)),
+        ("지연 시간(base)", f"p50 {_format_ms(p50_latency)} · p95 {_format_ms(p95_latency)}"),
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -232,6 +390,109 @@ def _plot_scatter(x: list[float], y: list[float], labels: list[str], xlabel: str
     ax.set_title(title, fontsize=13, fontweight="bold")
     ax.grid(alpha=0.3)
     fig.tight_layout()
+    return _fig_to_base64(fig)
+
+
+# ---------------------------------------------------------------------------
+# Reference Order visual (3-panel per model)
+# ---------------------------------------------------------------------------
+
+
+def _plot_reference_order_visual(df: pd.DataFrame) -> str:
+    """Tri-panel visual: gauge + donut + stacked bar for reference order sensitivity."""
+    from matplotlib.patches import Wedge
+
+    n = len(df)
+    fig, all_axes = plt.subplots(n, 3, figsize=(14, 5 * n))
+    if n == 1:
+        all_axes = [all_axes]
+
+    def v2a(v: float) -> float:
+        return 180.0 - v * 180.0
+
+    def draw_gauge(ax: plt.Axes, value: float, title: str, good: float = 0.9, warn: float = 0.8) -> None:
+        ax.set_aspect("equal")
+        ax.axis("off")
+        ax.set_xlim(0, 1)
+        ax.set_ylim(-0.2, 0.85)
+        cx, cy = 0.5, 0.35
+        r_o, r_i = 0.38, 0.22
+        for sv, ev, col in [(0.0, warn, "#F5564C"), (warn, good, "#F5A623"), (good, 1.0, "#34A853")]:
+            ax.add_patch(Wedge((cx, cy), r_o, v2a(ev), v2a(sv), width=r_o - r_i, color=col, alpha=0.9, zorder=1))
+        # Tick marks at thresholds
+        for tick_v, label in [(warn, f"{warn:.0%}"), (good, f"{good:.0%}")]:
+            ta = np.radians(v2a(tick_v))
+            ax.plot([cx + r_i * np.cos(ta), cx + (r_i - 0.04) * np.cos(ta)],
+                    [cy + r_i * np.sin(ta), cy + (r_i - 0.04) * np.sin(ta)], color="#555", lw=1.5)
+            ax.text(cx + (r_i - 0.1) * np.cos(ta), cy + (r_i - 0.1) * np.sin(ta),
+                    label, ha="center", fontsize=7, color="#555")
+        # Needle
+        ang = np.radians(v2a(value))
+        ax.annotate("", xy=(cx + (r_o - 0.02) * np.cos(ang), cy + (r_o - 0.02) * np.sin(ang)),
+                    xytext=(cx, cy), arrowprops=dict(arrowstyle="->", color="#222", lw=2.5), zorder=3)
+        ax.plot(cx, cy, "o", color="#222", markersize=5, zorder=4)
+        # Value + status
+        ax.text(cx, cy - 0.17, f"{value:.1%}", ha="center", fontsize=16, fontweight="bold")
+        if value >= good:
+            sc, st = "#34A853", "양호"
+        elif value >= warn:
+            sc, st = "#F5A623", "주의"
+        else:
+            sc, st = "#F5564C", "불량"
+        ax.text(cx, -0.14, st, ha="center", fontsize=11, fontweight="bold", color=sc,
+                bbox=dict(boxstyle="round,pad=0.3", facecolor=sc, alpha=0.15, edgecolor=sc))
+        ax.set_title(title, fontsize=11, fontweight="bold", pad=6)
+
+    for ax_row, (_, row) in zip(all_axes, df.iterrows()):
+        consistency = float(row["reference_order_consistency"])
+        flip_rate = float(row["label_flip_rate_by_reference_order"])
+        eligible = int(row["eligible_sample_groups"])
+        skipped = int(row["skipped_single_alias_groups"])
+        coverage = float(row["coverage"])
+        judge = str(row["judge_model"])
+        n_flipped = round(eligible * flip_rate)
+        n_consistent = eligible - n_flipped
+
+        ax1, ax2, ax3 = ax_row[0], ax_row[1], ax_row[2]
+
+        # Panel 1: Semicircle gauge for consistency rate
+        draw_gauge(ax1, consistency, f"순서 일관성\n{judge}")
+
+        # Panel 2: Donut — eligible vs skipped breakdown
+        wedges, texts, autotexts = ax2.pie(
+            [eligible, skipped],
+            labels=[f"테스트 가능\n({eligible}개, alias≥2)", f"제외됨\n({skipped}개, alias=1)"],
+            colors=["#4C8BF5", "#D1D5DB"],
+            autopct="%1.0f%%",
+            startangle=90,
+            wedgeprops={"width": 0.5, "edgecolor": "white", "linewidth": 2},
+            textprops={"fontsize": 9},
+        )
+        for at in autotexts:
+            at.set_fontsize(9)
+            at.set_fontweight("bold")
+        ax2.set_title(f"샘플 적용 범위\n(전체 커버리지 {coverage:.0%})", fontsize=11, fontweight="bold")
+
+        # Panel 3: Stacked bar — consistent vs flipped within eligible
+        bar_h = 0.35
+        ax3.barh([""], [n_consistent], color="#34A853", height=bar_h, label=f"일관됨 ({n_consistent}개)")
+        ax3.barh([""], [n_flipped], left=[n_consistent], color="#F5564C", height=bar_h, label=f"순서 뒤집힘 ({n_flipped}개)")
+        # 10% threshold line
+        threshold_n = eligible * 0.10
+        ax3.axvline(x=threshold_n, color="#F5A623", linestyle="--", lw=1.5, alpha=0.8, label=f"기준 10% ({threshold_n:.1f}개)")
+        ax3.set_xlim(0, max(eligible, 1))
+        ax3.set_xlabel("샘플 수", fontsize=9)
+        ax3.set_title(f"라벨 플립 현황\n플립율 {flip_rate:.1%}  (테스트 가능 {eligible}개 기준)", fontsize=11, fontweight="bold")
+        ax3.legend(loc="lower right", fontsize=8)
+        ax3.set_yticks([])
+        for spine in ["top", "right", "left"]:
+            ax3.spines[spine].set_visible(False)
+        if n_consistent > 0:
+            ax3.text(n_consistent / 2, 0, str(n_consistent), ha="center", va="center", fontsize=13, fontweight="bold", color="white")
+        if n_flipped > 0:
+            ax3.text(n_consistent + n_flipped / 2, 0, str(n_flipped), ha="center", va="center", fontsize=13, fontweight="bold", color="white")
+
+    fig.tight_layout(pad=2.5)
     return _fig_to_base64(fig)
 
 
@@ -348,10 +609,14 @@ def _operational_readiness(metrics: pd.DataFrame, leniency: pd.DataFrame) -> str
 _CSS = """
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", "NanumGothic",
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   background: #f0f2f5;
   color: #1a1a2e;
   line-height: 1.6;
+  word-break: keep-all;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 header {
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
@@ -471,7 +736,10 @@ def generate_report(output_dir: Path) -> Path:
     reference_order = _safe_read_csv(output_dir / "reference_order_sensitivity.csv")
     dummy_robustness = _safe_read_csv(output_dir / "dummy_answer_robustness.csv")
     answer_source_metrics = _safe_read_csv(output_dir / "metrics_by_answer_source.csv")
+    metrics_by_dataset = _safe_read_csv(output_dir / "metrics_by_dataset.csv")
     leniency = _safe_read_csv(output_dir / "leniency_bias.csv")
+    normalized_samples = _safe_read_parquet(output_dir / "normalized_samples.parquet")
+    parsed_predictions = _safe_read_parquet(output_dir / "parsed_predictions.parquet")
 
     # ------------------------------------------------------------------
     # Build all plots as base64
@@ -542,23 +810,41 @@ def generate_report(output_dir: Path) -> Path:
         dr_labels = (dummy_robustness["judge_model"] + ":" + dummy_robustness["dummy_class"]).tolist()
         plots["dummy_robustness"] = _plot_bar(dr_labels, dummy_robustness["robustness_accuracy"].tolist(), "Dummy Answer Robustness", "Accuracy", "#7C3AED")
 
+    if not reference_order.empty:
+        plots["reference_order_visual"] = _plot_reference_order_visual(reference_order)
+
     paper_ref_plots = _build_paper_reference_plots()
 
     # ------------------------------------------------------------------
     # Collect experiment metadata
     # ------------------------------------------------------------------
     config_path = output_dir / "config.resolved.yaml"
+    dataset_meta_path = output_dir / "dataset_meta.yaml"
     exp_name = output_dir.name
+    dataset_meta: dict = {}
     try:
         import yaml
         cfg = yaml.safe_load(config_path.read_text(encoding="utf-8")) if config_path.exists() else {}
         exp_name = cfg.get("experiment_name", exp_name)
+        dataset_meta = yaml.safe_load(dataset_meta_path.read_text(encoding="utf-8")) if dataset_meta_path.exists() else {}
     except Exception:
         pass
 
     # ------------------------------------------------------------------
     # Build callouts
     # ------------------------------------------------------------------
+    overview_items = _experiment_overview_items(
+        dataset_meta=dataset_meta,
+        normalized_samples=normalized_samples,
+        parsed_predictions=parsed_predictions,
+        metrics=metrics,
+        metrics_by_dataset=metrics_by_dataset,
+    )
+    overview_html = "".join(
+        f'<div class="summary-item"><div class="label">{label}</div><div class="value">{value}</div></div>'
+        for label, value in overview_items
+    )
+
     callout_items = [
         ("최우수 judge (Scott's π)", _ranking_winner(rankings, "primary_scotts_pi")),
         ("엄격 게이트 최우수 (FPR 최소)", _ranking_winner(rankings, "false_positive_rate")),
@@ -597,6 +883,9 @@ def generate_report(output_dir: Path) -> Path:
 """
 
     body_parts = [
+        '<h1 class="section-title">실험 개요</h1>',
+        f'<div class="summary-grid">{overview_html}</div>',
+        '<h1 class="section-title">핵심 요약</h1>',
         f'<div class="summary-grid">{callout_html}</div>',
         '<h1 class="section-title">핵심 성능 지표</h1>',
         metric_section("scotts_pi", "scotts_pi"),
@@ -617,30 +906,17 @@ def generate_report(output_dir: Path) -> Path:
         ),
         '<h1 class="section-title">Reference Order 민감도 분석</h1>',
         section(
-            "Reference Order 적용 범위",
-            _html_table(
-                reference_order[
-                    [
-                        "judge_model",
-                        "reference_order_consistency",
-                        "label_flip_rate_by_reference_order",
-                        "eligible_sample_groups",
-                        "skipped_single_alias_groups",
-                        "coverage",
-                        "valid_rows",
-                    ]
-                ].round(4)
-                if not reference_order.empty
-                else pd.DataFrame()
-            ),
-        ),
-        section(
-            "Reference Order 해석 가이드",
+            "순서 민감도 시각화",
             (
-                "<p>eligible_sample_groups는 alias가 2개 이상이라 순서 변경 테스트가 가능했던 샘플 수입니다. "
-                "skipped_single_alias_groups는 alias가 1개라 테스트가 적용되지 않은 샘플 수입니다. "
-                "coverage는 전체 base 샘플 중 실제 reference-order test에 포함된 비율입니다.</p>"
-            ),
+                f'<div class="chart-wrap"><img src="data:image/png;base64,{plots["reference_order_visual"]}" /></div>'
+                "<p style='margin-top:0.8em;font-size:0.88em;color:#555;'>"
+                "<b>순서 일관성(게이지)</b>: alias 순서를 바꿔도 동일한 레이블을 내리는 비율 — 90% 이상이면 양호. <br>"
+                "<b>샘플 적용 범위(도넛)</b>: alias가 2개 이상인 샘플만 테스트 가능, 1개짜리는 제외. <br>"
+                "<b>라벨 플립 현황(바)</b>: 테스트된 샘플 중 순서 변경 시 판정이 뒤집힌 건수, 점선은 10% 기준선."
+                "</p>"
+            )
+            if "reference_order_visual" in plots
+            else "<p class='no-data'>데이터 없음</p>",
         ),
         '<h1 class="section-title">Answer Source별 분석</h1>',
         section(
