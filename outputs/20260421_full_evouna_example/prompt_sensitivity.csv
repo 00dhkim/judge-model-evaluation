@@ -1,0 +1,4 @@
+judge_model,prompt_left,prompt_right,prompt_consistency,scotts_pi_by_prompt,metric_delta_between_prompts,label_flip_rate
+perfect_dummy,guideline,guideline_with_examples,1.0,1.0,0.0,0.0
+perfect_dummy,guideline,minimal,1.0,1.0,0.0,0.0
+perfect_dummy,guideline_with_examples,minimal,1.0,1.0,0.0,0.0

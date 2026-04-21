@@ -1,0 +1,3 @@
+judge_model,prompt_template,scotts_pi
+invalid_dummy,minimal,0.0
+perfect_dummy,minimal,0.6834011759384893

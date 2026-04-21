@@ -1,0 +1,2 @@
+judge_model,metric,ci_low,ci_high,iterations
+perfect_dummy,scotts_pi,0.4738095238095239,0.8762178418565012,20

@@ -1,0 +1,14 @@
+{
+  "enabled": false,
+  "endpoint": null,
+  "env_refs_present": [
+    "ARIZE_API_KEY",
+    "ARIZE_SPACE_ID"
+  ],
+  "project_name": "full_evouna_example",
+  "provider": null,
+  "trace_naming": {
+    "experiment": "judge-eval.experiment",
+    "sample_attempt": "judge-eval.sample-attempt"
+  }
+}

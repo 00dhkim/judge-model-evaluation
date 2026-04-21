@@ -1,0 +1,11 @@
+judge_model,dummy_class,rows,valid_rows,expected_label,robustness_accuracy,rejection_rate,yes_no_caution_count
+invalid_dummy,empty,50,0,False,0.0,0.0,0
+invalid_dummy,gold_answer_verbatim,50,0,True,0.0,0.0,0
+invalid_dummy,repeat_question,50,0,False,0.0,0.0,0
+invalid_dummy,sure,50,0,False,0.0,0.0,0
+invalid_dummy,yes,50,0,False,0.0,0.0,1
+perfect_dummy,empty,50,50,False,0.0,0.0,0
+perfect_dummy,gold_answer_verbatim,50,50,True,1.0,0.0,0
+perfect_dummy,repeat_question,50,50,False,1.0,1.0,0
+perfect_dummy,sure,50,50,False,1.0,1.0,0
+perfect_dummy,yes,50,50,False,0.98,1.0,1
