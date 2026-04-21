@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic import BaseModel, Field, ValidationError, computed_field, model_validator
 
 from judge_eval.settings import ARIZE_ENV_VARS, PROMPT_TEMPLATES
 from judge_eval.utils import stable_hash
@@ -56,7 +57,6 @@ class EvaluationConfig(BaseModel):
     enable_prompt_sensitivity: bool = True
     enable_reference_order_sensitivity: bool = True
     enable_dummy_answer_test: bool = True
-    dummy_answer_values: list[str] = Field(default_factory=lambda: ["Yes", "No", "I do not know"])
 
     @model_validator(mode="after")
     def validate_templates(self) -> "EvaluationConfig":
@@ -67,9 +67,16 @@ class EvaluationConfig(BaseModel):
 
 
 class OutputConfig(BaseModel):
-    dir: str
+    experiment_name: str
+    base_dir: str = "outputs"
     save_raw_predictions: bool = True
     save_report: bool = True
+
+    @computed_field
+    @property
+    def dir(self) -> str:
+        date = datetime.now().strftime("%Y%m%d")
+        return f"{self.base_dir}/{date}_{self.experiment_name}"
 
 
 class TelemetryConfig(BaseModel):

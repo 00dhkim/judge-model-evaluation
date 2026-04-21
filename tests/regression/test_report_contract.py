@@ -1,10 +1,11 @@
+from datetime import datetime
 from pathlib import Path
 from subprocess import run
 
 
 def test_report_contains_required_sections(tmp_path: Path):
     config = tmp_path / "config.yaml"
-    out = tmp_path / "out"
+    out = tmp_path / f"{datetime.now().strftime('%Y%m%d')}_out"
     config.write_text(
         "\n".join(
             [
@@ -18,7 +19,8 @@ def test_report_contains_required_sections(tmp_path: Path):
                 "    metadata:",
                 "      dummy_strategy: heuristic",
                 "output:",
-                f"  dir: {out}",
+                "  experiment_name: out",
+                f"  base_dir: {tmp_path}",
                 "telemetry:",
                 "  enabled: false",
                 "  provider: null",

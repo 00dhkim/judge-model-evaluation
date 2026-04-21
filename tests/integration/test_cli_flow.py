@@ -1,10 +1,11 @@
+from datetime import datetime
 from pathlib import Path
 from subprocess import run
 
 
 def test_cli_flow(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
-    output_dir = tmp_path / "out"
+    output_dir = tmp_path / f"{datetime.now().strftime('%Y%m%d')}_out"
     config_path.write_text(
         "\n".join(
             [
@@ -20,7 +21,8 @@ def test_cli_flow(tmp_path: Path):
                 "    metadata:",
                 "      dummy_strategy: heuristic",
                 "output:",
-                f"  dir: {output_dir}",
+                "  experiment_name: out",
+                f"  base_dir: {tmp_path}",
                 "telemetry:",
                 "  enabled: false",
                 "  provider: null",
