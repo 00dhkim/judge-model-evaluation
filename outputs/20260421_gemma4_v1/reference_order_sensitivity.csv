@@ -1,2 +1,2 @@
-judge_model,reference_order_consistency,label_flip_rate_by_reference_order,rows,valid_rows
-google-gemma-4-E2B-it,0.9230769230769231,0.07692307692307693,31,31
+judge_model,reference_order_consistency,label_flip_rate_by_reference_order,eligible_sample_groups,skipped_single_alias_groups,coverage,rows,valid_rows
+google-gemma-4-E2B-it,0.9230769230769231,0.07692307692307693,13,7,0.65,31,31

@@ -1,3 +1,7 @@
-judge_model,human_label,judge_score,human_score,score_delta,percent_agreement,scotts_pi,precision,recall,f1,tp,fp,tn,fn,fpr,fnr,invalid_rate,valid_rate,avg_latency_ms,p50_latency_ms,p95_latency_ms,total_estimated_cost
-google-gemma-4-E2B-it,False,1.0,0.0,1.0,0.0,-1.0,0.0,0.0,0.0,0,7,0,0,1.0,0.0,0.0,1.0,781.4285714285714,925.0,1131.4,0.0
-google-gemma-4-E2B-it,True,1.0,1.0,0.0,1.0,1.0,1.0,1.0,1.0,13,0,0,0,0.0,0.0,0.0,1.0,713.6923076923077,646.0,1077.1999999999996,0.0
+judge_model,prompt_template,human_label,judge_score,human_score,score_delta,percent_agreement,scotts_pi,precision,recall,f1,tp,fp,tn,fn,fpr,fnr,invalid_rate,valid_rate,avg_latency_ms,p50_latency_ms,p95_latency_ms,total_estimated_cost
+google-gemma-4-E2B-it,guideline,False,0.5714285714285714,0.0,0.5714285714285714,0.42857142857142855,-0.4,0.0,0.0,0.0,0,4,3,0,0.5714285714285714,0.0,0.0,1.0,955.8571428571429,841.0,1757.5999999999995,0.0
+google-gemma-4-E2B-it,guideline,True,1.0,1.0,0.0,1.0,1.0,1.0,1.0,1.0,13,0,0,0,0.0,0.0,0.0,1.0,655.6923076923077,621.0,947.3999999999999,0.0
+google-gemma-4-E2B-it,guideline_with_examples,False,0.42857142857142855,0.0,0.42857142857142855,0.5714285714285714,-0.27272727272727265,0.0,0.0,0.0,0,3,4,0,0.42857142857142855,0.0,0.0,1.0,892.5714285714286,827.0,1946.8999999999992,0.0
+google-gemma-4-E2B-it,guideline_with_examples,True,0.8461538461538461,1.0,-0.15384615384615385,0.8461538461538461,-0.08333333333333463,1.0,0.8461538461538461,0.9166666666666666,11,0,0,2,0.0,0.15384615384615385,0.0,1.0,637.2307692307693,619.0,947.3999999999999,0.0
+google-gemma-4-E2B-it,minimal,False,1.0,0.0,1.0,0.0,-1.0,0.0,0.0,0.0,0,7,0,0,1.0,0.0,0.0,1.0,775.5714285714286,917.0,1115.9,0.0
+google-gemma-4-E2B-it,minimal,True,1.0,1.0,0.0,1.0,1.0,1.0,1.0,1.0,13,0,0,0,0.0,0.0,0.0,1.0,713.6923076923077,655.0,1074.3999999999996,0.0

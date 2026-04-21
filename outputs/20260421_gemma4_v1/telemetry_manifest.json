@@ -33,15 +33,15 @@
         "action": "get",
         "created": false,
         "returncode": 0,
-        "stdout": "{\n  \"id\": \"RGF0YXNldDozNDE5ODU6Y05FTQ==\",\n  \"name\": \"meta-judge-eval\",\n  \"space_id\": \"U3BhY2U6MzIwMjI6L1dXcQ==\",\n  \"created_at\": \"2026-04-21T05:01:24.448780Z\",\n  \"updated_at\": \"2026-04-21T08:23:57.430797Z\",\n  \"versions\": [\n    {\n      \"id\": \"RGF0YXNldFZlcnNpb246MzQ1NjYyOkxJZFg=\",\n      \"name\": \"2026-04-21 05:01:24\",\n      \"dataset_id\": \"RGF0YXNldDozNDE5ODU6Y05FTQ==\",\n      \"created_at\": \"2026-04-21T05:01:24.452487Z\",\n      \"updated_at\": \"2026-04-21T05:01:24.448780Z\"\n    }\n  ]\n}",
+        "stdout": "{\n  \"id\": \"RGF0YXNldDozNDE5ODU6Y05FTQ==\",\n  \"name\": \"meta-judge-eval\",\n  \"space_id\": \"U3BhY2U6MzIwMjI6L1dXcQ==\",\n  \"created_at\": \"2026-04-21T05:01:24.448780Z\",\n  \"updated_at\": \"2026-04-21T08:30:18.395161Z\",\n  \"versions\": [\n    {\n      \"id\": \"RGF0YXNldFZlcnNpb246MzQ1NjYyOkxJZFg=\",\n      \"name\": \"2026-04-21 05:01:24\",\n      \"dataset_id\": \"RGF0YXNldDozNDE5ODU6Y05FTQ==\",\n      \"created_at\": \"2026-04-21T05:01:24.452487Z\",\n      \"updated_at\": \"2026-04-21T05:01:24.448780Z\"\n    }\n  ]\n}",
         "stderr": "ℹ Fetching dataset"
       },
       "append": {
         "action": "append",
         "created": false,
         "returncode": 0,
-        "stdout": "{\n  \"id\": \"RGF0YXNldDozNDE5ODU6Y05FTQ==\",\n  \"name\": \"meta-judge-eval\",\n  \"space_id\": \"U3BhY2U6MzIwMjI6L1dXcQ==\",\n  \"created_at\": \"2026-04-21T05:01:24.448780Z\",\n  \"updated_at\": \"2026-04-21T08:30:18.395161Z\",\n  \"versions\": [\n    {\n      \"id\": \"RGF0YXNldFZlcnNpb246MzQ1NjYyOkxJZFg=\",\n      \"name\": \"2026-04-21 05:01:24\",\n      \"dataset_id\": \"RGF0YXNldDozNDE5ODU6Y05FTQ==\",\n      \"created_at\": \"2026-04-21T05:01:24.452487Z\",\n      \"updated_at\": \"2026-04-21T05:01:24.448780Z\"\n    }\n  ]\n}",
-        "stderr": "ℹ Appending examples\n✓ Appended 1 example(s)"
+        "stdout": "{\n  \"id\": \"RGF0YXNldDozNDE5ODU6Y05FTQ==\",\n  \"name\": \"meta-judge-eval\",\n  \"space_id\": \"U3BhY2U6MzIwMjI6L1dXcQ==\",\n  \"created_at\": \"2026-04-21T05:01:24.448780Z\",\n  \"updated_at\": \"2026-04-21T16:34:52.874166Z\",\n  \"versions\": [\n    {\n      \"id\": \"RGF0YXNldFZlcnNpb246MzQ1NjYyOkxJZFg=\",\n      \"name\": \"2026-04-21 05:01:24\",\n      \"dataset_id\": \"RGF0YXNldDozNDE5ODU6Y05FTQ==\",\n      \"created_at\": \"2026-04-21T05:01:24.452487Z\",\n      \"updated_at\": \"2026-04-21T05:01:24.448780Z\"\n    }\n  ]\n}",
+        "stderr": "ℹ Appending examples\n✓ Appended 3 example(s)"
       }
     }
   },
