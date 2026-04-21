@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from tqdm import tqdm
 
 from judge_eval.config import ExperimentConfig
 from judge_eval.parsing import parse_model_output
@@ -79,7 +80,7 @@ def run_predictions(
         raw_predictions_path.touch()
     with raw_predictions_path.open("a", encoding="utf-8") as handle:
         try:
-            for sample in evaluation_rows:
+            for sample in tqdm(evaluation_rows, desc="Evaluating", unit="sample"):
                 for model in config.judge_models:
                     model_family = model.metadata.get("model_family", model.provider)
                     unit_key = stable_hash(
