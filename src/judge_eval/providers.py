@@ -10,6 +10,7 @@ _RATE_LIMIT_BASE_DELAY = 1.0
 _HF_LOCAL_PIPELINES: dict[str, Any] = {}
 
 import requests
+from requests import RequestException
 
 from judge_eval.config import ModelConfig
 
@@ -74,6 +75,22 @@ def _heuristic_label(golden: str, candidate: str) -> bool:
     return any(alias in candidate_norm or candidate_norm in alias for alias in aliases)
 
 
+def _retry_delay(attempt: int, retry_after: str | None = None) -> float:
+    if retry_after and retry_after.replace(".", "", 1).isdigit():
+        return float(retry_after)
+    return _RATE_LIMIT_BASE_DELAY * (2**attempt)
+
+
+def _should_retry_request_error(exc: RequestException) -> bool:
+    return isinstance(
+        exc,
+        (
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+        ),
+    )
+
+
 def _call_chat_completion_provider(model: ModelConfig, prompt: str) -> ProviderResponse:
     if not model.endpoint:
         raise ProviderError(f"model {model.name} missing endpoint")
@@ -92,14 +109,18 @@ def _call_chat_completion_provider(model: ModelConfig, prompt: str) -> ProviderR
         "max_tokens": model.max_tokens,
     }
     for attempt in range(_RATE_LIMIT_MAX_RETRIES + 1):
-        response = requests.post(model.endpoint, headers=headers, json=payload, timeout=120)
+        try:
+            response = requests.post(model.endpoint, headers=headers, json=payload, timeout=120)
+        except RequestException as exc:
+            if _should_retry_request_error(exc) and attempt < _RATE_LIMIT_MAX_RETRIES:
+                time.sleep(_retry_delay(attempt))
+                continue
+            raise ProviderError(f"provider request failed: {exc}") from exc
         if response.status_code != 429:
             break
         if attempt == _RATE_LIMIT_MAX_RETRIES:
             raise ProviderError(f"rate limit exceeded after {_RATE_LIMIT_MAX_RETRIES} retries: {response.text}")
-        retry_after = response.headers.get("Retry-After")
-        delay = float(retry_after) if retry_after and retry_after.replace(".", "", 1).isdigit() else _RATE_LIMIT_BASE_DELAY * (2**attempt)
-        time.sleep(delay)
+        time.sleep(_retry_delay(attempt, response.headers.get("Retry-After")))
     if response.status_code >= 400:
         raise ProviderError(f"provider call failed: {response.status_code} {response.text}")
     data = response.json()
@@ -118,11 +139,23 @@ def _call_custom_http_provider(model: ModelConfig, prompt: str) -> ProviderRespo
     if not model.endpoint:
         raise ProviderError(f"model {model.name} missing endpoint")
     started = time.perf_counter()
-    response = requests.post(
-        model.endpoint,
-        json={"model": model.model or model.name, "prompt": prompt, "max_tokens": model.max_tokens},
-        timeout=120,
-    )
+    for attempt in range(_RATE_LIMIT_MAX_RETRIES + 1):
+        try:
+            response = requests.post(
+                model.endpoint,
+                json={"model": model.model or model.name, "prompt": prompt, "max_tokens": model.max_tokens},
+                timeout=120,
+            )
+        except RequestException as exc:
+            if _should_retry_request_error(exc) and attempt < _RATE_LIMIT_MAX_RETRIES:
+                time.sleep(_retry_delay(attempt))
+                continue
+            raise ProviderError(f"provider request failed: {exc}") from exc
+        if response.status_code != 429:
+            break
+        if attempt == _RATE_LIMIT_MAX_RETRIES:
+            raise ProviderError(f"rate limit exceeded after {_RATE_LIMIT_MAX_RETRIES} retries: {response.text}")
+        time.sleep(_retry_delay(attempt, response.headers.get("Retry-After")))
     if response.status_code >= 400:
         raise ProviderError(f"provider call failed: {response.status_code} {response.text}")
     data = response.json()

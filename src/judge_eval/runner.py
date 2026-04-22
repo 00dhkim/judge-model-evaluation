@@ -42,6 +42,32 @@ def finalized_keys_from_parquet(path: Path) -> set[str]:
     return set(frame["unit_key"].tolist()) if "unit_key" in frame.columns else set()
 
 
+def finalized_keys_from_raw_jsonl(path: Path) -> set[str]:
+    if not path.exists():
+        return set()
+    finished: set[str] = set()
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            payload = line.strip()
+            if not payload:
+                continue
+            try:
+                record = json.loads(payload)
+            except json.JSONDecodeError:
+                continue
+            unit_key = record.get("unit_key")
+            if isinstance(unit_key, str) and unit_key:
+                finished.add(unit_key)
+    return finished
+
+
+def finalized_keys(output_dir: Path) -> set[str]:
+    parquet_keys = finalized_keys_from_parquet(output_dir / "parsed_predictions.parquet")
+    if parquet_keys:
+        return parquet_keys
+    return finalized_keys_from_raw_jsonl(output_dir / "raw_predictions.jsonl")
+
+
 def git_commit() -> str:
     try:
         result = subprocess.run(
@@ -66,7 +92,7 @@ def run_predictions(
 ) -> pd.DataFrame:
     raw_predictions_path = output_dir / "raw_predictions.jsonl"
     parsed_rows: list[dict[str, Any]] = []
-    finished = finalized_keys_from_parquet(output_dir / "parsed_predictions.parquet") if resume else set()
+    finished = finalized_keys(output_dir) if resume else set()
     telemetry = TelemetrySession(
         config.telemetry.enabled,
         config.telemetry.project_name,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -25,6 +26,39 @@ from judge_eval.telemetry import (
     sync_ax_dataset,
     write_telemetry_manifest,
 )
+
+
+def _load_predictions_frame(output_dir: Path) -> pd.DataFrame:
+    parsed_path = output_dir / "parsed_predictions.parquet"
+    if parsed_path.exists():
+        return pd.read_parquet(parsed_path)
+
+    raw_path = output_dir / "raw_predictions.jsonl"
+    if raw_path.exists():
+        rows: list[dict[str, object]] = []
+        with raw_path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                payload = line.strip()
+                if not payload:
+                    continue
+                rows.append(json.loads(payload))
+        if rows:
+            frame = pd.DataFrame(rows)
+            parquet_frame = frame.copy()
+            for column in parquet_frame.columns:
+                if parquet_frame[column].map(lambda value: isinstance(value, dict | list)).any():
+                    parquet_frame[column] = parquet_frame[column].map(
+                        lambda value: json.dumps(value, ensure_ascii=False, sort_keys=True)
+                        if isinstance(value, dict | list)
+                        else value
+                    )
+            parquet_frame.to_parquet(parsed_path, index=False)
+            return frame
+
+    raise FileNotFoundError(
+        f"Missing predictions artifact in {output_dir}. "
+        "Expected parsed_predictions.parquet or raw_predictions.jsonl."
+    )
 
 def cmd_validate_config(args: argparse.Namespace) -> int:
     errors = validate_config_file(args.config)
@@ -82,7 +116,11 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 def cmd_metrics(args: argparse.Namespace) -> int:
     output_dir = Path(args.output_dir)
-    parsed = pd.read_parquet(output_dir / "parsed_predictions.parquet")
+    try:
+        parsed = _load_predictions_frame(output_dir)
+    except FileNotFoundError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     write_metrics_bundle(parsed, output_dir, bootstrap_iterations=args.bootstrap_iterations)
     config_payload = yaml.safe_load((output_dir / "config.resolved.yaml").read_text(encoding="utf-8"))
     telemetry = config_payload.get("telemetry", {}) or {}
@@ -107,8 +145,7 @@ def cmd_metrics(args: argparse.Namespace) -> int:
             manifest["ax"]["dataset"] = dataset_status
             write_telemetry_manifest(manifest_path, manifest)
         if dataset_status.get("status") == "error":
-            print(f"Failed to sync Arize dataset via ax: {dataset_status}", file=sys.stderr)
-            return 1
+            print(f"Warning: failed to sync Arize dataset via ax: {dataset_status}", file=sys.stderr)
     print(f"Metrics written to {output_dir}")
     return 0
 
