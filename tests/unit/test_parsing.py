@@ -5,6 +5,25 @@ def test_parse_json_output():
     parsed = parse_model_output('{"reason":"ok","label":true}')
     assert parsed["parse_method"] == "json"
     assert parsed["parsed_label"] is True
+    assert parsed["judge_reason"] == "ok"
+
+
+def test_parse_json_output_after_thought_block():
+    parsed = parse_model_output(
+        '<thought>internal reasoning</thought>```json\n{"reason":"ok","label":true}\n```'
+    )
+    assert parsed["parse_method"] == "json"
+    assert parsed["parsed_label"] is True
+    assert parsed["judge_reason"] == "ok"
+
+
+def test_parse_json_output_after_thought_block_without_fence():
+    parsed = parse_model_output(
+        '<thought>internal reasoning</thought>{"reason":"still ok","label":false}'
+    )
+    assert parsed["parse_method"] == "json"
+    assert parsed["parsed_label"] is False
+    assert parsed["judge_reason"] == "still ok"
 
 
 def test_parse_regex_output():
