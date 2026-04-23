@@ -2,17 +2,17 @@
   {
     "judge_model":"llama_3_1_8b",
     "prompt_template":"minimal",
-    "tp":0,
-    "fp":0,
-    "tn":0,
-    "fn":0
+    "tp":801,
+    "fp":85,
+    "tn":166,
+    "fn":142
   },
   {
     "judge_model":"qwen_3_235b",
     "prompt_template":"minimal",
-    "tp":0,
-    "fp":0,
-    "tn":0,
-    "fn":0
+    "tp":882,
+    "fp":45,
+    "tn":209,
+    "fn":64
   }
 ]

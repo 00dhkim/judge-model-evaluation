@@ -1,0 +1,3 @@
+judge_model,metric,ci_low,ci_high,iterations
+llama_3_1_8b,scotts_pi,0.4131861219835482,0.5191267837300756,200
+qwen_3_235b,scotts_pi,0.6901184018397795,0.7828848604579838,200

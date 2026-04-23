@@ -1,0 +1,25 @@
+{
+  "enabled": false,
+  "provider": null,
+  "endpoint": null,
+  "project_name": "meta-judge-eval",
+  "dataset_name": "meta-judge-eval",
+  "space": null,
+  "profile": null,
+  "env_refs_present": [
+    "ARIZE_API_KEY",
+    "ARIZE_SPACE_ID"
+  ],
+  "ax": {
+    "project": {
+      "enabled": false,
+      "status": "disabled"
+    }
+  },
+  "trace_naming": {
+    "root": "eval.judge_sample",
+    "prompt_render": "prompt.render",
+    "llm_judge": "llm.judge",
+    "parse_output": "eval.parse_output"
+  }
+}

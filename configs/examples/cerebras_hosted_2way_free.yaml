@@ -1,4 +1,4 @@
-experiment_name: cerebras_hosted_3way_free
+experiment_name: cerebras_hosted_2way_free
 datasets:
   - name: evouna_tq
     path: data/EVOUNA/TQ.json
@@ -54,13 +54,13 @@ evaluation:
   enable_dummy_answer_test: false
 
 output:
-  experiment_name: cerebras_hosted_3way_free
+  experiment_name: cerebras_hosted_2way_free
   save_raw_predictions: true
   save_report: true
 
-telemetry:
-  enabled: true
-  provider: arize
-  project_name: meta-judge-eval
-  dataset_name: meta-judge-eval
-  space: ${ARIZE_SPACE_ID}
+# telemetry:
+#   enabled: true
+#   provider: arize
+#   project_name: meta-judge-eval
+#   dataset_name: meta-judge-eval
+#   space: ${ARIZE_SPACE_ID}
