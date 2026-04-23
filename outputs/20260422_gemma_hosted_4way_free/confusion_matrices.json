@@ -1,0 +1,34 @@
+[
+  {
+    "judge_model":"gemma_3_12b",
+    "prompt_template":"minimal",
+    "tp":928,
+    "fp":120,
+    "tn":134,
+    "fn":17
+  },
+  {
+    "judge_model":"gemma_3_27b",
+    "prompt_template":"minimal",
+    "tp":900,
+    "fp":47,
+    "tn":207,
+    "fn":46
+  },
+  {
+    "judge_model":"gemma_4_26b",
+    "prompt_template":"minimal",
+    "tp":915,
+    "fp":40,
+    "tn":207,
+    "fn":29
+  },
+  {
+    "judge_model":"gemma_4_31b",
+    "prompt_template":"minimal",
+    "tp":850,
+    "fp":48,
+    "tn":184,
+    "fn":26
+  }
+]

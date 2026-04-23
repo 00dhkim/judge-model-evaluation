@@ -410,6 +410,11 @@ def _plot_reference_order_visual(df: pd.DataFrame) -> str:
     def v2a(v: float) -> float:
         return 180.0 - v * 180.0
 
+    def metric_or_default(value: object, default: float = 0.0) -> float:
+        if pd.isna(value):
+            return default
+        return float(value)
+
     def draw_gauge(ax: plt.Axes, value: float, title: str, good: float = 0.9, warn: float = 0.8) -> None:
         ax.set_aspect("equal")
         ax.axis("off")
@@ -444,11 +449,11 @@ def _plot_reference_order_visual(df: pd.DataFrame) -> str:
         ax.set_title(title, fontsize=11, fontweight="bold", pad=6)
 
     for ax_row, (_, row) in zip(all_axes, df.iterrows()):
-        consistency = float(row["reference_order_consistency"])
-        flip_rate = float(row["label_flip_rate_by_reference_order"])
+        consistency = metric_or_default(row["reference_order_consistency"])
+        flip_rate = metric_or_default(row["label_flip_rate_by_reference_order"])
         eligible = int(row["eligible_sample_groups"])
         skipped = int(row["skipped_single_alias_groups"])
-        coverage = float(row["coverage"])
+        coverage = metric_or_default(row["coverage"])
         judge = str(row["judge_model"])
         n_flipped = round(eligible * flip_rate)
         n_consistent = eligible - n_flipped
@@ -494,6 +499,16 @@ def _plot_reference_order_visual(df: pd.DataFrame) -> str:
 
     fig.tight_layout(pad=2.5)
     return _fig_to_base64(fig)
+
+
+def _has_reference_order_visual_data(df: pd.DataFrame) -> bool:
+    if df.empty:
+        return False
+    required_columns = {"reference_order_consistency", "label_flip_rate_by_reference_order"}
+    if not required_columns.issubset(df.columns):
+        return False
+    metrics = df[list(required_columns)]
+    return bool(metrics.notna().any(axis=1).any())
 
 
 # ---------------------------------------------------------------------------
@@ -810,7 +825,7 @@ def generate_report(output_dir: Path) -> Path:
         dr_labels = (dummy_robustness["judge_model"] + ":" + dummy_robustness["dummy_class"]).tolist()
         plots["dummy_robustness"] = _plot_bar(dr_labels, dummy_robustness["robustness_accuracy"].tolist(), "Dummy Answer Robustness", "Accuracy", "#7C3AED")
 
-    if not reference_order.empty:
+    if _has_reference_order_visual_data(reference_order):
         plots["reference_order_visual"] = _plot_reference_order_visual(reference_order)
 
     paper_ref_plots = _build_paper_reference_plots()

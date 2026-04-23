@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -19,7 +18,13 @@ from judge_eval.config import (
 from judge_eval.data import load_evouna_samples
 from judge_eval.metrics import write_metrics_bundle
 from judge_eval.reporting import generate_report
-from judge_eval.runner import prepare_output_dir, run_predictions, write_resolved_config
+from judge_eval.runner import (
+    load_raw_predictions,
+    prepare_output_dir,
+    prepare_predictions_for_parquet,
+    run_predictions,
+    write_resolved_config,
+)
 from judge_eval.telemetry import (
     build_metrics_dataset_file,
     load_telemetry_manifest,
@@ -35,24 +40,9 @@ def _load_predictions_frame(output_dir: Path) -> pd.DataFrame:
 
     raw_path = output_dir / "raw_predictions.jsonl"
     if raw_path.exists():
-        rows: list[dict[str, object]] = []
-        with raw_path.open("r", encoding="utf-8") as handle:
-            for line in handle:
-                payload = line.strip()
-                if not payload:
-                    continue
-                rows.append(json.loads(payload))
-        if rows:
-            frame = pd.DataFrame(rows)
-            parquet_frame = frame.copy()
-            for column in parquet_frame.columns:
-                if parquet_frame[column].map(lambda value: isinstance(value, dict | list)).any():
-                    parquet_frame[column] = parquet_frame[column].map(
-                        lambda value: json.dumps(value, ensure_ascii=False, sort_keys=True)
-                        if isinstance(value, dict | list)
-                        else value
-                    )
-            parquet_frame.to_parquet(parsed_path, index=False)
+        frame = load_raw_predictions(raw_path)
+        if not frame.empty:
+            prepare_predictions_for_parquet(frame).to_parquet(parsed_path, index=False)
             return frame
 
     raise FileNotFoundError(
@@ -109,7 +99,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         resolved_config=resolved_config_with_redactions(args.config),
         resume=args.resume,
     )
-    parsed.to_parquet(output_dir / "parsed_predictions.parquet", index=False)
+    prepare_predictions_for_parquet(parsed).to_parquet(output_dir / "parsed_predictions.parquet", index=False)
     print(f"Completed predictions: {len(parsed)} rows")
     return 0
 

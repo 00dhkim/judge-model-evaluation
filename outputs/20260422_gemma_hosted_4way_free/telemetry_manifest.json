@@ -1,0 +1,52 @@
+{
+  "enabled": true,
+  "provider": "arize",
+  "endpoint": "https://otlp.arize.com/v1",
+  "project_name": "meta-judge-eval",
+  "dataset_name": "meta-judge-eval",
+  "space": "U3BhY2U6MzIwMjI6L1dXcQ==",
+  "profile": null,
+  "env_refs_present": [
+    "ARIZE_API_KEY",
+    "ARIZE_SPACE_ID"
+  ],
+  "ax": {
+    "project": {
+      "enabled": true,
+      "space": "U3BhY2U6MzIwMjI6L1dXcQ==",
+      "project_name": "meta-judge-eval",
+      "status": "exists",
+      "lookup": {
+        "action": "get",
+        "created": false,
+        "returncode": 0,
+        "stdout": "{\n  \"id\": \"TW9kZWw6NzU0NTUzNzkyNzo0azNo\",\n  \"name\": \"meta-judge-eval\",\n  \"space_id\": \"U3BhY2U6MzIwMjI6L1dXcQ==\",\n  \"created_at\": \"2026-04-21T05:01:18.660000Z\"\n}",
+        "stderr": "ℹ Fetching project"
+      }
+    },
+    "dataset": {
+      "enabled": true,
+      "space": "U3BhY2U6MzIwMjI6L1dXcQ==",
+      "dataset_name": "meta-judge-eval",
+      "status": "error",
+      "lookup": {
+        "action": "get",
+        "created": false,
+        "returncode": 4,
+        "stderr": "ℹ Fetching dataset\n✗ Error: 502 Bad Gateway\n\n  Suggestion: Bad gateway. The server is temporarily unavailable. Try again later.\n  Run with --verbose for technical details."
+      },
+      "create": {
+        "action": "create",
+        "created": false,
+        "returncode": 4,
+        "stderr": "ℹ Creating dataset\n✗ Error: 502 Bad Gateway\n\n  Suggestion: Bad gateway. The server is temporarily unavailable. Try again later.\n  Run with --verbose for technical details."
+      }
+    }
+  },
+  "trace_naming": {
+    "root": "eval.judge_sample",
+    "prompt_render": "prompt.render",
+    "llm_judge": "llm.judge",
+    "parse_output": "eval.parse_output"
+  }
+}

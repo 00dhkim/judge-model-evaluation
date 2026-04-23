@@ -68,6 +68,30 @@ def finalized_keys(output_dir: Path) -> set[str]:
     return finalized_keys_from_raw_jsonl(output_dir / "raw_predictions.jsonl")
 
 
+def load_raw_predictions(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        return pd.DataFrame()
+    rows: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            payload = line.strip()
+            if not payload:
+                continue
+            rows.append(json.loads(payload))
+    return pd.DataFrame(rows)
+
+
+def prepare_predictions_for_parquet(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        return frame
+    parquet_frame = frame.copy()
+    if "variant_metadata" in parquet_frame.columns:
+        parquet_frame["variant_metadata"] = parquet_frame["variant_metadata"].map(
+            lambda value: None if isinstance(value, dict) and not value else value
+        )
+    return parquet_frame
+
+
 def git_commit() -> str:
     try:
         result = subprocess.run(
@@ -139,10 +163,12 @@ def run_predictions(
             return existing
         combined = pd.concat([existing, parsed], ignore_index=True)
         combined = combined.drop_duplicates(subset=["unit_key"], keep="last")
-        combined.to_parquet(existing_path, index=False)
+        prepare_predictions_for_parquet(combined).to_parquet(existing_path, index=False)
         return combined
+    if parsed.empty:
+        return load_raw_predictions(raw_predictions_path)
     if not parsed.empty:
-        parsed.to_parquet(existing_path, index=False)
+        prepare_predictions_for_parquet(parsed).to_parquet(existing_path, index=False)
     return parsed
 
 
@@ -180,7 +206,7 @@ def _build_evaluation_rows(config: ExperimentConfig, normalized_samples: pd.Data
         base["variant_group"] = sample["sample_id"]
         base["parent_sample_id"] = sample["sample_id"]
         base["prompt_template"] = base_prompt
-        base["variant_metadata"] = {}
+        base["variant_metadata"] = None
         rows.append(base)
         if config.evaluation.enable_prompt_sensitivity:
             for prompt_template in config.evaluation.prompt_templates:

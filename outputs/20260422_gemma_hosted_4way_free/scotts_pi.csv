@@ -1,0 +1,5 @@
+judge_model,prompt_template,scotts_pi
+gemma_3_12b,minimal,0.5929878029894756
+gemma_3_27b,minimal,0.7674396796669137
+gemma_4_26b,minimal,0.8208079440306928
+gemma_4_31b,minimal,0.7908655440321998
