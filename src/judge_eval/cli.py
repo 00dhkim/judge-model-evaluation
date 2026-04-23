@@ -19,6 +19,7 @@ from judge_eval.data import load_evouna_samples
 from judge_eval.metrics import write_metrics_bundle
 from judge_eval.reporting import generate_report
 from judge_eval.runner import (
+    failed_unit_keys_from_raw_jsonl,
     load_raw_predictions,
     prepare_output_dir,
     prepare_predictions_for_parquet,
@@ -50,6 +51,27 @@ def _load_predictions_frame(output_dir: Path) -> pd.DataFrame:
         "Expected parsed_predictions.parquet or raw_predictions.jsonl."
     )
 
+
+def _load_run_context(config_path: str) -> tuple[object, str, Path, pd.DataFrame, str, dict]:
+    config, _ = load_config(config_path)
+    config_hash_value = config_hash(config_path)
+    output_dir = prepare_output_dir(resolve_output_dir(config, config_hash_value))
+    write_output_dir_manifest(output_dir, config, config_hash_value)
+    normalized_path = output_dir / "normalized_samples.parquet"
+    if normalized_path.exists():
+        samples = pd.read_parquet(normalized_path)
+        dataset_hash = ""
+    else:
+        samples, meta = load_evouna_samples(config)
+        dataset_hash = meta["dataset_hash"]
+        samples.to_parquet(normalized_path, index=False)
+    if not dataset_hash:
+        meta = yaml.safe_load((output_dir / "dataset_meta.yaml").read_text(encoding="utf-8"))
+        dataset_hash = meta["dataset_hash"]
+    resolved_config = resolved_config_with_redactions(config_path)
+    write_resolved_config(output_dir / "config.resolved.yaml", resolved_config)
+    return config, config_hash_value, output_dir, samples, dataset_hash, resolved_config
+
 def cmd_validate_config(args: argparse.Namespace) -> int:
     errors = validate_config_file(args.config)
     if errors:
@@ -74,33 +96,49 @@ def cmd_prepare_data(args: argparse.Namespace) -> int:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    config, _ = load_config(args.config)
-    config_hash_value = config_hash(args.config)
-    output_dir = prepare_output_dir(resolve_output_dir(config, config_hash_value))
-    write_output_dir_manifest(output_dir, config, config_hash_value)
-    normalized_path = output_dir / "normalized_samples.parquet"
-    if normalized_path.exists():
-        samples = pd.read_parquet(normalized_path)
-        dataset_hash = ""
-    else:
-        samples, meta = load_evouna_samples(config)
-        dataset_hash = meta["dataset_hash"]
-        samples.to_parquet(normalized_path, index=False)
-    if not dataset_hash:
-        meta = yaml.safe_load((output_dir / "dataset_meta.yaml").read_text(encoding="utf-8"))
-        dataset_hash = meta["dataset_hash"]
-    write_resolved_config(output_dir / "config.resolved.yaml", resolved_config_with_redactions(args.config))
+    config, config_hash_value, output_dir, samples, dataset_hash, resolved_config = _load_run_context(args.config)
     parsed = run_predictions(
         config=config,
         normalized_samples=samples,
         output_dir=output_dir,
         config_hash_value=config_hash_value,
         dataset_hash=dataset_hash,
-        resolved_config=resolved_config_with_redactions(args.config),
+        resolved_config=resolved_config,
         resume=args.resume,
     )
     prepare_predictions_for_parquet(parsed).to_parquet(output_dir / "parsed_predictions.parquet", index=False)
     print(f"Completed predictions: {len(parsed)} rows")
+    return 0
+
+
+def cmd_retry_failures(args: argparse.Namespace) -> int:
+    config, config_hash_value, output_dir, samples, dataset_hash, resolved_config = _load_run_context(args.config)
+    raw_predictions_path = output_dir / "raw_predictions.jsonl"
+    failed_unit_keys = failed_unit_keys_from_raw_jsonl(raw_predictions_path)
+    if not failed_unit_keys:
+        parsed = run_predictions(
+            config=config,
+            normalized_samples=samples,
+            output_dir=output_dir,
+            config_hash_value=config_hash_value,
+            dataset_hash=dataset_hash,
+            resolved_config=resolved_config,
+            resume=True,
+        )
+        prepare_predictions_for_parquet(parsed).to_parquet(output_dir / "parsed_predictions.parquet", index=False)
+        print("No failed predictions to retry")
+        return 0
+    parsed = run_predictions(
+        config=config,
+        normalized_samples=samples,
+        output_dir=output_dir,
+        config_hash_value=config_hash_value,
+        dataset_hash=dataset_hash,
+        resolved_config=resolved_config,
+        only_unit_keys=failed_unit_keys,
+    )
+    prepare_predictions_for_parquet(parsed).to_parquet(output_dir / "parsed_predictions.parquet", index=False)
+    print(f"Retried predictions: {len(failed_unit_keys)} units")
     return 0
 
 
@@ -162,6 +200,10 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("config")
     run_parser.add_argument("--resume", action="store_true")
     run_parser.set_defaults(func=cmd_run)
+
+    retry_failures_parser = subparsers.add_parser("retry-failures")
+    retry_failures_parser.add_argument("config")
+    retry_failures_parser.set_defaults(func=cmd_retry_failures)
 
     metrics_parser = subparsers.add_parser("metrics")
     metrics_parser.add_argument("output_dir")

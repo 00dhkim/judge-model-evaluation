@@ -36,3 +36,9 @@ def test_parse_invalid_output():
     parsed = parse_model_output("nonsense")
     assert parsed["parse_method"] == "invalid"
     assert parsed["parsed_label"] is None
+
+
+def test_parse_non_object_json_output_is_invalid():
+    parsed = parse_model_output('["unexpected"]')
+    assert parsed["parse_method"] == "invalid"
+    assert parsed["parsed_label"] is None

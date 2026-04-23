@@ -62,10 +62,10 @@ def finalized_keys_from_raw_jsonl(path: Path) -> set[str]:
 
 
 def finalized_keys(output_dir: Path) -> set[str]:
-    parquet_keys = finalized_keys_from_parquet(output_dir / "parsed_predictions.parquet")
-    if parquet_keys:
-        return parquet_keys
-    return finalized_keys_from_raw_jsonl(output_dir / "raw_predictions.jsonl")
+    raw_keys = finalized_keys_from_raw_jsonl(output_dir / "raw_predictions.jsonl")
+    if raw_keys:
+        return raw_keys
+    return finalized_keys_from_parquet(output_dir / "parsed_predictions.parquet")
 
 
 def load_raw_predictions(path: Path) -> pd.DataFrame:
@@ -92,6 +92,24 @@ def prepare_predictions_for_parquet(frame: pd.DataFrame) -> pd.DataFrame:
     return parquet_frame
 
 
+def final_predictions_from_raw_jsonl(path: Path) -> pd.DataFrame:
+    frame = load_raw_predictions(path)
+    if frame.empty:
+        return frame
+    if "unit_key" not in frame.columns:
+        return frame
+    return frame.drop_duplicates(subset=["unit_key"], keep="last")
+
+
+def failed_unit_keys_from_raw_jsonl(path: Path, statuses: set[str] | None = None) -> set[str]:
+    target_statuses = statuses or {"error", "invalid"}
+    frame = final_predictions_from_raw_jsonl(path)
+    if frame.empty or "parse_status" not in frame.columns or "unit_key" not in frame.columns:
+        return set()
+    failed = frame[frame["parse_status"].isin(target_statuses)]
+    return set(failed["unit_key"].dropna().astype(str).tolist())
+
+
 def git_commit() -> str:
     try:
         result = subprocess.run(
@@ -113,6 +131,7 @@ def run_predictions(
     dataset_hash: str,
     resolved_config: dict[str, Any],
     resume: bool = False,
+    only_unit_keys: set[str] | None = None,
 ) -> pd.DataFrame:
     raw_predictions_path = output_dir / "raw_predictions.jsonl"
     parsed_rows: list[dict[str, Any]] = []
@@ -136,6 +155,8 @@ def run_predictions(
                     unit_key = stable_hash(
                         [sample["sample_id"], model.name, sample["prompt_template"], sample["variant_type"], sample["variant_id"]]
                     )
+                    if only_unit_keys is not None and unit_key not in only_unit_keys:
+                        continue
                     if resume and unit_key in finished:
                         continue
                     final_record = _run_single_attempt(
@@ -155,21 +176,12 @@ def run_predictions(
         finally:
             telemetry.shutdown()
     write_telemetry_manifest(output_dir / "telemetry_manifest.json", telemetry_manifest(telemetry))
-    parsed = pd.DataFrame(parsed_rows)
     existing_path = output_dir / "parsed_predictions.parquet"
-    if existing_path.exists():
-        existing = pd.read_parquet(existing_path)
-        if parsed.empty:
-            return existing
-        combined = pd.concat([existing, parsed], ignore_index=True)
-        combined = combined.drop_duplicates(subset=["unit_key"], keep="last")
-        prepare_predictions_for_parquet(combined).to_parquet(existing_path, index=False)
-        return combined
-    if parsed.empty:
-        return load_raw_predictions(raw_predictions_path)
-    if not parsed.empty:
-        prepare_predictions_for_parquet(parsed).to_parquet(existing_path, index=False)
-    return parsed
+    final_predictions = final_predictions_from_raw_jsonl(raw_predictions_path)
+    if final_predictions.empty:
+        final_predictions = pd.DataFrame(parsed_rows)
+    prepare_predictions_for_parquet(final_predictions).to_parquet(existing_path, index=False)
+    return final_predictions
 
 
 def _is_yes_no_question(question: str) -> bool:

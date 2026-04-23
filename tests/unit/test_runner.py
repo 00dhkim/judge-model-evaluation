@@ -3,6 +3,8 @@ from pathlib import Path
 import pandas as pd
 
 from judge_eval.runner import (
+    final_predictions_from_raw_jsonl,
+    failed_unit_keys_from_raw_jsonl,
     finalized_keys,
     finalized_keys_from_raw_jsonl,
     load_raw_predictions,
@@ -37,6 +39,24 @@ def test_finalized_keys_falls_back_to_raw_when_parquet_missing(tmp_path: Path):
     )
 
     assert finalized_keys(output_dir) == {"resume-me"}
+
+
+def test_finalized_keys_prefers_raw_when_parquet_is_stale(tmp_path: Path):
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    (output_dir / "raw_predictions.jsonl").write_text(
+        "\n".join(
+            [
+                '{"unit_key":"u1","parse_status":"ok"}',
+                '{"unit_key":"u2","parse_status":"error"}',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    pd.DataFrame([{"unit_key": "u1"}]).to_parquet(output_dir / "parsed_predictions.parquet", index=False)
+
+    assert finalized_keys(output_dir) == {"u1", "u2"}
 
 
 def test_load_raw_predictions_reads_jsonl_rows(tmp_path: Path):
@@ -90,3 +110,41 @@ def test_prepare_predictions_for_parquet_can_write_all_empty_variant_metadata(tm
 
     assert loaded["unit_key"].tolist() == ["u1", "u2"]
     assert loaded["variant_metadata"].isna().tolist() == [True, True]
+
+
+def test_final_predictions_from_raw_jsonl_keeps_last_attempt_per_unit(tmp_path: Path):
+    raw_path = tmp_path / "raw_predictions.jsonl"
+    raw_path.write_text(
+        "\n".join(
+            [
+                '{"unit_key":"u1","retry_count":0,"parse_status":"invalid"}',
+                '{"unit_key":"u1","retry_count":1,"parse_status":"retry_ok"}',
+                '{"unit_key":"u2","retry_count":0,"parse_status":"ok"}',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    frame = final_predictions_from_raw_jsonl(raw_path)
+
+    assert frame["unit_key"].tolist() == ["u1", "u2"]
+    assert frame["parse_status"].tolist() == ["retry_ok", "ok"]
+
+
+def test_failed_unit_keys_from_raw_jsonl_uses_final_status_per_unit(tmp_path: Path):
+    raw_path = tmp_path / "raw_predictions.jsonl"
+    raw_path.write_text(
+        "\n".join(
+            [
+                '{"unit_key":"u1","retry_count":0,"parse_status":"error"}',
+                '{"unit_key":"u1","retry_count":1,"parse_status":"ok"}',
+                '{"unit_key":"u2","retry_count":0,"parse_status":"invalid"}',
+                '{"unit_key":"u3","retry_count":0,"parse_status":"error"}',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert failed_unit_keys_from_raw_jsonl(raw_path) == {"u2", "u3"}

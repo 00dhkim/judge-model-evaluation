@@ -36,6 +36,8 @@ def parse_model_output(raw_output: str) -> dict[str, Any]:
     for candidate in _json_parse_candidates(text):
         try:
             payload = json.loads(candidate)
+            if not isinstance(payload, dict):
+                continue
             label = payload.get("label")
             if isinstance(label, bool):
                 reason = payload.get("reason")
