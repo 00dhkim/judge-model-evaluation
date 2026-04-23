@@ -1,0 +1,18 @@
+[
+  {
+    "judge_model":"llama_3_1_8b",
+    "prompt_template":"minimal",
+    "tp":0,
+    "fp":0,
+    "tn":0,
+    "fn":0
+  },
+  {
+    "judge_model":"qwen_3_235b",
+    "prompt_template":"minimal",
+    "tp":0,
+    "fp":0,
+    "tn":0,
+    "fn":0
+  }
+]

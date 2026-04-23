@@ -1,0 +1,7 @@
+judge_model,prompt_template,answer_length_bucket,judge_score,human_score,score_delta,percent_agreement,scotts_pi,precision,recall,f1,tp,fp,tn,fn,fpr,fnr,invalid_rate,valid_rate,avg_latency_ms,p50_latency_ms,p95_latency_ms,total_estimated_cost
+llama_3_1_8b,minimal,long,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0,0,0,0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0
+llama_3_1_8b,minimal,medium,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0,0,0,0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0
+llama_3_1_8b,minimal,short,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0,0,0,0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0
+qwen_3_235b,minimal,long,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0,0,0,0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0
+qwen_3_235b,minimal,medium,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0,0,0,0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0
+qwen_3_235b,minimal,short,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0,0,0,0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0

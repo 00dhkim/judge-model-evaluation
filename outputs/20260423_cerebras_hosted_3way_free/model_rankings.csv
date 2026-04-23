@@ -1,0 +1,17 @@
+ranking_name,judge_model,prompt_template,rank,metric_column,metric_value
+primary_scotts_pi,llama_3_1_8b,minimal,1,scotts_pi,0.0
+primary_scotts_pi,qwen_3_235b,minimal,2,scotts_pi,0.0
+percent_agreement,llama_3_1_8b,minimal,1,percent_agreement,0.0
+percent_agreement,qwen_3_235b,minimal,2,percent_agreement,0.0
+absolute_score_gap,llama_3_1_8b,minimal,1,score_delta,0.0
+absolute_score_gap,qwen_3_235b,minimal,2,score_delta,0.0
+false_positive_rate,llama_3_1_8b,minimal,1,fpr,0.0
+false_positive_rate,qwen_3_235b,minimal,2,fpr,0.0
+false_negative_rate,llama_3_1_8b,minimal,1,fnr,0.0
+false_negative_rate,qwen_3_235b,minimal,2,fnr,0.0
+precision,llama_3_1_8b,minimal,1,precision,0.0
+precision,qwen_3_235b,minimal,2,precision,0.0
+recall,llama_3_1_8b,minimal,1,recall,0.0
+recall,qwen_3_235b,minimal,2,recall,0.0
+f1,llama_3_1_8b,minimal,1,f1,0.0
+f1,qwen_3_235b,minimal,2,f1,0.0

@@ -1,0 +1,3 @@
+judge_model,prompt_template,scotts_pi
+llama_3_1_8b,minimal,0.0
+qwen_3_235b,minimal,0.0

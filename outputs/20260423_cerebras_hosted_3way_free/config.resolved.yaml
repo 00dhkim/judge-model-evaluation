@@ -1,0 +1,53 @@
+experiment_name: cerebras_hosted_3way_free
+datasets:
+- name: evouna_tq
+  path: data/EVOUNA/TQ.json
+  sampling:
+    sample_size: 600
+    seed: 42
+- name: evouna_nq
+  path: data/EVOUNA/NQ.json
+  sampling:
+    sample_size: 600
+    seed: 42
+filter:
+  improper: false
+  exclude_non_boolean_labels: true
+  exclude_empty_candidate_answers: true
+judge_models:
+- name: llama_3_1_8b
+  provider: openai_compatible
+  model: llama3.1-8b
+  endpoint: https://api.cerebras.ai/v1/chat/completions
+  api_key_env: CEREBRAS_API_KEY
+  temperature: 0.0
+  max_tokens: 512
+- name: qwen_3_235b
+  provider: openai_compatible
+  model: qwen-3-235b-a22b-instruct-2507
+  endpoint: https://api.cerebras.ai/v1/chat/completions
+  api_key_env: CEREBRAS_API_KEY
+  temperature: 0.0
+  max_tokens: 512
+evaluation:
+  prompt_templates:
+  - minimal
+  retry_count: 0
+  invalid_output_policy: store_invalid
+  bootstrap_iterations: 200
+  enable_prompt_sensitivity: false
+  enable_reference_order_sensitivity: false
+  enable_dummy_answer_test: false
+output:
+  experiment_name: cerebras_hosted_3way_free
+  save_raw_predictions: true
+  save_report: true
+telemetry:
+  enabled: true
+  provider: arize
+  project_name: meta-judge-eval
+  dataset_name: meta-judge-eval
+  space: U3BhY2U6MzIwMjI6L1dXcQ==
+  env_refs:
+  - ARIZE_API_KEY
+  - ARIZE_SPACE_ID
