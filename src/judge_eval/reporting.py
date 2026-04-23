@@ -380,6 +380,117 @@ def _plot_heatmap(pivot: pd.DataFrame, title: str, cmap: str = "YlOrRd") -> str:
     return _fig_to_base64(fig)
 
 
+def _plot_model_rankings_chart(rankings: pd.DataFrame) -> str:
+    """Rank heatmap for model rankings — standard academic leaderboard style.
+
+    Rows = model+prompt configs, columns = ranking criteria.
+    Cell color encodes rank (green=1st, red=last); value is annotated inside.
+    Avoids the false 'connectivity' implied by bump/line charts for independent metrics.
+    """
+    if rankings.empty:
+        return ""
+
+    METRIC_SHORT = {
+        "primary_scotts_pi": "Scott's π",
+        "percent_agreement": "% Agree",
+        "absolute_score_gap": "Score Gap↓",
+        "false_positive_rate": "FPR↓",
+        "false_negative_rate": "FNR↓",
+        "precision": "Precision",
+        "recall": "Recall",
+        "f1": "F1",
+    }
+    # Lower-is-better metrics get inverted color scale
+    LOWER_BETTER = {"absolute_score_gap", "false_positive_rate", "false_negative_rate"}
+
+    rankings = rankings.copy()
+    rankings["model_key"] = rankings["judge_model"] + "\n(" + rankings["prompt_template"] + ")"
+
+    # Build rank pivot and value pivot
+    rank_pivot = rankings.pivot_table(index="model_key", columns="ranking_name", values="rank", aggfunc="min")
+    val_pivot = rankings.pivot_table(index="model_key", columns="ranking_name", values="metric_value", aggfunc="mean")
+
+    # Order columns by METRIC_SHORT key order
+    col_order = [c for c in METRIC_SHORT if c in rank_pivot.columns] + [c for c in rank_pivot.columns if c not in METRIC_SHORT]
+    rank_pivot = rank_pivot.reindex(columns=col_order)
+    val_pivot = val_pivot.reindex(columns=col_order)
+
+    # Sort rows: models that are rank-1 most often go first (lower avg rank = better)
+    rank_pivot["_avg"] = rank_pivot.mean(axis=1)
+    rank_pivot = rank_pivot.sort_values("_avg").drop(columns="_avg")
+    val_pivot = val_pivot.reindex(index=rank_pivot.index)
+
+    n_rows, n_cols = rank_pivot.shape
+    cell_w, cell_h = 1.1, 0.85
+    fig_w = min(max(8, n_cols * cell_w + 2.5), 13)  # cap at 13 inches
+    fig_h = max(4, n_rows * cell_h + 1.5)
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+
+    max_rank = int(rank_pivot.values[~np.isnan(rank_pivot.values)].max()) if n_rows > 0 else 1
+
+    for ri, model in enumerate(rank_pivot.index):
+        for ci, col in enumerate(rank_pivot.columns):
+            rank_val = rank_pivot.loc[model, col]
+            metric_val = val_pivot.loc[model, col]
+            if pd.isna(rank_val):
+                ax.add_patch(plt.Rectangle((ci, ri), 1, 1, color="#F0F0F0", zorder=1))
+                ax.text(ci + 0.5, ri + 0.5, "—", ha="center", va="center", fontsize=9, color="#AAA")
+                continue
+
+            # Normalize rank to [0,1] for colormap (0=best color)
+            norm = (rank_val - 1) / max(max_rank - 1, 1)
+            if col in LOWER_BETTER:
+                # For lower-is-better: rank 1 (lowest value) is still "best"
+                # color stays: norm=0 → green, norm=1 → red
+                pass
+            color = plt.cm.Blues(0.85 - norm * 0.65)  # type: ignore[attr-defined]  # rank1=dark, last=light
+
+            ax.add_patch(plt.Rectangle((ci, ri), 1, 1, color=color, zorder=1, linewidth=0))
+
+            # Rank number (large, bold)
+            text_color = "white" if norm < 0.15 else "#222"  # only rank 1 (darkest) gets white
+            ax.text(ci + 0.5, ri + 0.63, f"#{int(rank_val)}", ha="center", va="center",
+                    fontsize=14, fontweight="bold", color=text_color, zorder=2)
+            # Metric value (below rank number)
+            val_str = f"{metric_val:.3f}" if not pd.isna(metric_val) else ""
+            ax.text(ci + 0.5, ri + 0.24, val_str, ha="center", va="center",
+                    fontsize=10, color=text_color, alpha=0.9, zorder=2)
+
+    # Grid lines
+    for x in range(n_cols + 1):
+        ax.axvline(x, color="white", lw=2, zorder=3)
+    for y in range(n_rows + 1):
+        ax.axhline(y, color="white", lw=2, zorder=3)
+
+    # Axis labels
+    col_labels = [METRIC_SHORT.get(c, c) for c in rank_pivot.columns]
+    ax.set_xticks([i + 0.5 for i in range(n_cols)])
+    ax.set_xticklabels(col_labels, fontsize=10, fontweight="600")
+    ax.set_yticks([i + 0.5 for i in range(n_rows)])
+    ax.set_yticklabels(rank_pivot.index.tolist(), fontsize=9)
+    ax.set_xlim(0, n_cols)
+    ax.set_ylim(0, n_rows)
+    ax.tick_params(length=0)
+    ax.xaxis.set_ticks_position("top")
+    ax.xaxis.set_label_position("top")
+
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
+    # Colorbar legend
+    import matplotlib.cm as cm
+    import matplotlib.colors as mcolors
+    sm = plt.cm.ScalarMappable(cmap="Blues", norm=mcolors.Normalize(vmin=1, vmax=max_rank))
+    sm.set_array([])
+    cb = fig.colorbar(sm, ax=ax, fraction=0.025, pad=0.02, aspect=30)
+    cb.set_label("Rank", fontsize=9)
+    cb.ax.invert_yaxis()  # rank 1 at top = green
+
+    fig.suptitle("Model Rankings — Cross-Metric Overview", fontsize=13, fontweight="bold", y=1.02)
+    fig.tight_layout()
+    return _fig_to_base64(fig)
+
+
 def _plot_scatter(x: list[float], y: list[float], labels: list[str], xlabel: str, ylabel: str, title: str) -> str:
     fig, ax = plt.subplots(figsize=(7, 5))
     ax.scatter(x, y, s=80, color="#4C8BF5", zorder=3)
@@ -968,7 +1079,14 @@ def generate_report(output_dir: Path) -> Path:
                 else pd.DataFrame()
             ),
         ),
-        section("Model Rankings", _html_table(rankings) if not rankings.empty else pd.DataFrame()),
+        section(
+            "Model Rankings",
+            (
+                f'<div class="chart-wrap"><img src="data:image/png;base64,{_plot_model_rankings_chart(rankings)}" alt="Model Rankings" /></div>'
+                if not rankings.empty
+                else "<p class='no-data'>데이터 없음</p>"
+            ),
+        ),
         # ------------------------------------------------------------------
         # Paper reference section
         # ------------------------------------------------------------------
