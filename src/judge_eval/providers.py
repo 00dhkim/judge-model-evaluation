@@ -4,6 +4,7 @@ import json
 import time
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlparse
 
 _RATE_LIMIT_MAX_RETRIES = 10
 _RATE_LIMIT_BASE_DELAY = 1.0
@@ -26,6 +27,16 @@ class ProviderResponse:
 
 class ProviderError(RuntimeError):
     pass
+
+
+OPENAI_TEXT_PRICING_PER_1M: dict[str, dict[str, float]] = {
+    "gpt-4.1": {"input": 2.00, "cached_input": 0.50, "output": 8.00},
+    "gpt-4.1-mini": {"input": 0.40, "cached_input": 0.10, "output": 1.60},
+    "gpt-4.1-nano": {"input": 0.10, "cached_input": 0.025, "output": 0.40},
+    "gpt-5.4": {"input": 2.50, "cached_input": 0.25, "output": 15.00},
+    "gpt-5.4-mini": {"input": 0.75, "cached_input": 0.075, "output": 4.50},
+    "gpt-5.4-nano": {"input": 0.20, "cached_input": 0.02, "output": 1.25},
+}
 
 
 def call_provider(model: ModelConfig, prompt: str) -> ProviderResponse:
@@ -91,6 +102,33 @@ def _should_retry_request_error(exc: RequestException) -> bool:
     )
 
 
+def _uses_openai_chat_completions_contract(endpoint: str) -> bool:
+    parsed = urlparse(endpoint)
+    return parsed.scheme in {"http", "https"} and parsed.netloc == "api.openai.com"
+
+
+def estimate_openai_text_cost(model_name: str | None, usage: dict[str, Any]) -> float | None:
+    if not model_name:
+        return None
+    pricing = OPENAI_TEXT_PRICING_PER_1M.get(model_name)
+    if pricing is None:
+        return None
+    prompt_tokens = usage.get("prompt_tokens")
+    completion_tokens = usage.get("completion_tokens")
+    if not isinstance(prompt_tokens, int) or not isinstance(completion_tokens, int):
+        return None
+    prompt_details = usage.get("prompt_tokens_details", {})
+    cached_tokens = prompt_details.get("cached_tokens", 0) if isinstance(prompt_details, dict) else 0
+    if not isinstance(cached_tokens, int):
+        cached_tokens = 0
+    uncached_tokens = max(prompt_tokens - cached_tokens, 0)
+    return (
+        (uncached_tokens / 1_000_000) * pricing["input"]
+        + (cached_tokens / 1_000_000) * pricing["cached_input"]
+        + (completion_tokens / 1_000_000) * pricing["output"]
+    )
+
+
 def _call_chat_completion_provider(model: ModelConfig, prompt: str) -> ProviderResponse:
     if not model.endpoint:
         raise ProviderError(f"model {model.name} missing endpoint")
@@ -106,8 +144,11 @@ def _call_chat_completion_provider(model: ModelConfig, prompt: str) -> ProviderR
         "model": model.model or model.model_path or model.name,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": model.temperature,
-        "max_tokens": model.max_tokens,
     }
+    if _uses_openai_chat_completions_contract(model.endpoint):
+        payload["max_completion_tokens"] = model.max_tokens
+    else:
+        payload["max_tokens"] = model.max_tokens
     for attempt in range(_RATE_LIMIT_MAX_RETRIES + 1):
         try:
             response = requests.post(model.endpoint, headers=headers, json=payload, timeout=120)
@@ -126,12 +167,13 @@ def _call_chat_completion_provider(model: ModelConfig, prompt: str) -> ProviderR
     data = response.json()
     choice = data["choices"][0]["message"]["content"]
     usage = data.get("usage", {})
+    estimated_cost = estimate_openai_text_cost(model.model, usage) if _uses_openai_chat_completions_contract(model.endpoint) else None
     return ProviderResponse(
         raw_output=choice,
         latency_ms=int((time.perf_counter() - started) * 1000),
         input_tokens=usage.get("prompt_tokens"),
         output_tokens=usage.get("completion_tokens"),
-        estimated_cost=None,
+        estimated_cost=estimated_cost,
     )
 
 
