@@ -1,0 +1,5 @@
+judge_model,prompt_template,scotts_pi
+gpt_4_1_mini,minimal,0.6075830431658654
+gpt_4_1_nano,minimal,0.24290053928595864
+gpt_5_4_mini,minimal,0.7972964412856474
+gpt_5_4_nano,minimal,0.7148851638015724

@@ -1,0 +1,34 @@
+[
+  {
+    "judge_model":"gpt_4_1_mini",
+    "prompt_template":"minimal",
+    "tp":907,
+    "fp":103,
+    "tn":151,
+    "fn":39
+  },
+  {
+    "judge_model":"gpt_4_1_nano",
+    "prompt_template":"minimal",
+    "tp":917,
+    "fp":194,
+    "tn":60,
+    "fn":28
+  },
+  {
+    "judge_model":"gpt_5_4_mini",
+    "prompt_template":"minimal",
+    "tp":911,
+    "fp":45,
+    "tn":209,
+    "fn":35
+  },
+  {
+    "judge_model":"gpt_5_4_nano",
+    "prompt_template":"minimal",
+    "tp":886,
+    "fp":55,
+    "tn":199,
+    "fn":60
+  }
+]

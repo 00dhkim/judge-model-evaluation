@@ -1,0 +1,5 @@
+judge_model,reference_order_consistency,label_flip_rate_by_reference_order,eligible_sample_groups,skipped_single_alias_groups,coverage,rows,valid_rows
+gpt_4_1_mini,,,772,428,0.6433333333333333,0,0
+gpt_4_1_nano,,,772,428,0.6433333333333333,0,0
+gpt_5_4_mini,,,772,428,0.6433333333333333,0,0
+gpt_5_4_nano,,,772,428,0.6433333333333333,0,0
