@@ -855,6 +855,204 @@ h1.section-title {
 # ---------------------------------------------------------------------------
 
 
+_EXP_COLORS = ["#4C8BF5", "#F5564C", "#F5A623", "#34A853", "#7C3AED", "#0891B2", "#DB2777", "#D97706", "#059669", "#DC2626"]
+
+
+def _exp_color_map(exp_names: list[str]) -> dict[str, str]:
+    return {name: _EXP_COLORS[i % len(_EXP_COLORS)] for i, name in enumerate(sorted(set(exp_names)))}
+
+
+def generate_merged_report(output_dirs: list[Path], report_path: Path) -> Path:
+    import yaml
+
+    all_metrics: list[pd.DataFrame] = []
+    all_prompt_sensitivity: list[pd.DataFrame] = []
+    all_dummy_robustness: list[pd.DataFrame] = []
+    all_rankings: list[pd.DataFrame] = []
+    exp_names: list[str] = []
+
+    for output_dir in output_dirs:
+        metrics = _safe_read_csv(output_dir / "metrics_overall.csv")
+        if metrics.empty:
+            continue
+        exp_name = output_dir.name
+        config_path = output_dir / "config.resolved.yaml"
+        if config_path.exists():
+            try:
+                cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+                exp_name = cfg.get("experiment_name", exp_name)
+            except Exception:
+                pass
+
+        metrics["experiment"] = exp_name
+        all_metrics.append(metrics)
+        exp_names.append(exp_name)
+
+        ps = _safe_read_csv(output_dir / "prompt_sensitivity.csv")
+        if not ps.empty:
+            ps["experiment"] = exp_name
+            all_prompt_sensitivity.append(ps)
+
+        dr = _safe_read_csv(output_dir / "dummy_answer_robustness.csv")
+        if not dr.empty:
+            dr["experiment"] = exp_name
+            all_dummy_robustness.append(dr)
+
+        rankings = _safe_read_csv(output_dir / "model_rankings.csv")
+        if not rankings.empty:
+            rankings["experiment"] = exp_name
+            all_rankings.append(rankings)
+
+    if not all_metrics:
+        raise ValueError("No metrics found in provided output directories")
+
+    merged_metrics = pd.concat(all_metrics, ignore_index=True)
+    merged_ps = pd.concat(all_prompt_sensitivity, ignore_index=True) if all_prompt_sensitivity else pd.DataFrame()
+    merged_dr = pd.concat(all_dummy_robustness, ignore_index=True) if all_dummy_robustness else pd.DataFrame()
+    merged_rankings = pd.concat(all_rankings, ignore_index=True) if all_rankings else pd.DataFrame()
+
+    color_map = _exp_color_map(exp_names)
+    best_per_model = (
+        merged_metrics.sort_values("scotts_pi", ascending=False)
+        .drop_duplicates("judge_model")
+        .sort_values("scotts_pi", ascending=False)
+        .reset_index(drop=True)
+    )
+
+    plots: dict[str, str] = {}
+
+    labels_best = (best_per_model["judge_model"] + "\n(" + best_per_model["prompt_template"] + ")").tolist()
+    bar_colors = [color_map.get(exp, "#4C8BF5") for exp in best_per_model["experiment"].tolist()]
+
+    plots["scotts_pi"] = _plot_bar(labels_best, best_per_model["scotts_pi"].tolist(), "Scott's π — 모델별 최고 성능", "Scott's π", bar_colors)  # type: ignore[arg-type]
+    plots["percent_agreement"] = _plot_bar(labels_best, best_per_model["percent_agreement"].tolist(), "Percent Agreement — 모델별 최고 성능", "Agreement", bar_colors)  # type: ignore[arg-type]
+    plots["f1"] = _plot_bar(labels_best, best_per_model["f1"].tolist(), "F1 — 모델별 최고 성능", "F1", bar_colors)  # type: ignore[arg-type]
+    plots["fpr_fnr"] = _plot_grouped_bar(
+        labels_best,
+        {"FPR": best_per_model["fpr"].tolist(), "FNR": best_per_model["fnr"].tolist()},
+        "FPR / FNR — 모델별 최고 성능",
+        colors=["#F5564C", "#F5A623"],
+    )
+
+    has_latency = "avg_latency_ms" in merged_metrics.columns
+    has_cost = "total_estimated_cost" in merged_metrics.columns
+    all_labels = (merged_metrics["judge_model"] + ":" + merged_metrics["prompt_template"]).tolist()
+    lat = merged_metrics["avg_latency_ms"].fillna(0).tolist() if has_latency else [0] * len(merged_metrics)
+    cost = merged_metrics["total_estimated_cost"].fillna(0).tolist() if has_cost else [0] * len(merged_metrics)
+    plots["cost_latency"] = _plot_scatter(lat, cost, all_labels, "Avg Latency (ms)", "Estimated Cost", "Cost / Latency Trade-off")
+
+    from judge_eval.metrics import compute_rankings
+    global_rankings = compute_rankings(merged_metrics)
+    if not global_rankings.empty:
+        plots["rankings"] = _plot_model_rankings_chart(global_rankings)
+
+    if not merged_ps.empty:
+        ps_pivot = merged_ps.pivot_table(
+            index="judge_model",
+            columns="prompt_left",
+            values="label_flip_rate",
+            aggfunc="mean",
+            fill_value=0.0,
+        )
+        plots["prompt_sensitivity_heatmap"] = _plot_heatmap(ps_pivot, "Prompt Sensitivity — Label Flip Rate", cmap="YlOrRd")
+
+    if not merged_dr.empty:
+        dr_labels = (merged_dr["judge_model"] + ":" + merged_dr["dummy_class"]).tolist()
+        plots["dummy_robustness"] = _plot_bar(dr_labels, merged_dr["robustness_accuracy"].tolist(), "Dummy Answer Robustness", "Accuracy", "#7C3AED")
+
+    # Legend for experiment colors
+    legend_items = "".join(
+        f'<span style="display:inline-flex;align-items:center;gap:0.4rem;margin-right:1rem;">'
+        f'<span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:{color_map[n]};"></span>'
+        f'{n}</span>'
+        for n in sorted(color_map)
+    )
+    legend_html = f'<div style="margin-bottom:1rem;font-size:0.88rem;">{legend_items}</div>'
+
+    def section(title: str, content: str) -> str:
+        return f'<section class="section-block"><h2>{title}</h2>{content}</section>'
+
+    def chart_section(title: str, plot_key: str, desc: str = "") -> str:
+        img = plots.get(plot_key, "")
+        img_tag = (
+            f'<div class="chart-wrap"><img src="data:image/png;base64,{img}" alt="{title}" /></div>'
+            if img else "<p class='no-data'>데이터 없음</p>"
+        )
+        desc_tag = f'<p class="metric-desc">{desc}</p>' if desc else ""
+        return f'<section class="metric-card"><h2>{title}</h2>{desc_tag}{img_tag}</section>'
+
+    display_cols = ["experiment", "judge_model", "prompt_template", "scotts_pi", "percent_agreement", "precision", "recall", "f1", "fpr", "fnr", "score_delta", "invalid_rate", "total_estimated_cost"]
+    display_cols = [c for c in display_cols if c in merged_metrics.columns]
+    table_df = merged_metrics[display_cols].sort_values("scotts_pi", ascending=False).round(4)
+
+    ps_models = merged_ps["judge_model"].nunique() if not merged_ps.empty else 0
+    dr_models = merged_dr["judge_model"].nunique() if not merged_dr.empty else 0
+
+    body_parts = [
+        '<h1 class="section-title">실험 목록</h1>',
+        section("병합된 실험", (
+            f"<p style='margin-bottom:0.8rem'>총 <strong>{len(output_dirs)}</strong>개 실험 &nbsp;·&nbsp; "
+            f"<strong>{merged_metrics['judge_model'].nunique()}</strong>개 모델</p>"
+            + legend_html
+            + _html_table(pd.DataFrame({"실험명": exp_names, "디렉토리": [d.name for d in output_dirs]}))
+        )),
+        '<h1 class="section-title">핵심 성능 지표 (모델별 최고 성능 기준)</h1>',
+        chart_section("Scott's π", "scotts_pi", METRIC_DESCRIPTIONS["scotts_pi"]["desc"]),
+        chart_section("Percent Agreement", "percent_agreement", METRIC_DESCRIPTIONS["percent_agreement"]["desc"]),
+        chart_section("F1", "f1", METRIC_DESCRIPTIONS["precision_recall_f1"]["desc"]),
+        chart_section("FPR / FNR", "fpr_fnr", METRIC_DESCRIPTIONS["fpr_fnr"]["desc"]),
+        chart_section("Cost / Latency Trade-off", "cost_latency", METRIC_DESCRIPTIONS["cost_latency"]["desc"]),
+        '<h1 class="section-title">전체 모델 랭킹</h1>',
+        section("Model Rankings (전체)", (
+            f'<div class="chart-wrap"><img src="data:image/png;base64,{plots["rankings"]}" /></div>'
+            if "rankings" in plots else "<p class='no-data'>데이터 없음</p>"
+        )),
+        f'<h1 class="section-title">프롬프트 민감도 ({ps_models}개 모델 — 복수 프롬프트 실험만 포함)</h1>',
+        (
+            chart_section("Prompt Sensitivity", "prompt_sensitivity_heatmap", METRIC_DESCRIPTIONS["prompt_sensitivity"]["desc"])
+            + section(
+                "프롬프트별 상세 비교",
+                _html_table(
+                    merged_ps[["experiment", "judge_model", "prompt_left", "prompt_right", "label_flip_rate", "scotts_pi_by_prompt", "prompt_consistency"]].round(4)
+                ),
+            )
+        ) if not merged_ps.empty else section("프롬프트 민감도", "<p class='no-data'>해당 데이터 없음 — 복수 프롬프트 실험 없음</p>"),
+        f'<h1 class="section-title">더미 응답 강건성 ({dr_models}개 모델 — 더미 테스트 실험만 포함)</h1>',
+        (
+            chart_section("Dummy Answer Robustness", "dummy_robustness", METRIC_DESCRIPTIONS["dummy_robustness"]["desc"])
+            + section("더미 응답 상세", _html_table(merged_dr))
+        ) if not merged_dr.empty else section("더미 응답 강건성", "<p class='no-data'>해당 데이터 없음</p>"),
+        '<h1 class="section-title">전체 메트릭 테이블</h1>',
+        section("All Metrics (Scott's π 내림차순)", _html_table(table_df)),
+    ]
+
+    html = f"""<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Merged Judge Evaluation Report</title>
+  <style>{_CSS}</style>
+</head>
+<body>
+  <header>
+    <h1>Merged Judge Evaluation Report</h1>
+    <p>{len(output_dirs)}개 실험 병합 &nbsp;|&nbsp; {merged_metrics['judge_model'].nunique()}개 모델</p>
+  </header>
+  <div class="container">
+    {"".join(body_parts)}
+  </div>
+  <footer>
+    Generated by judge-model-evaluation — merged report
+  </footer>
+</body>
+</html>
+"""
+
+    report_path.write_text(html, encoding="utf-8")
+    return report_path
+
+
 def generate_report(output_dir: Path) -> Path:
     metrics = _safe_read_csv(output_dir / "metrics_overall.csv")
     rankings = _safe_read_csv(output_dir / "model_rankings.csv")

@@ -17,7 +17,7 @@ from judge_eval.config import (
 )
 from judge_eval.data import load_evouna_samples
 from judge_eval.metrics import write_metrics_bundle
-from judge_eval.reporting import generate_report
+from judge_eval.reporting import generate_merged_report, generate_report
 from judge_eval.runner import (
     failed_unit_keys_from_raw_jsonl,
     load_raw_predictions,
@@ -184,6 +184,20 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_merge(args: argparse.Namespace) -> int:
+    output_dirs = [Path(d) for d in args.output_dirs]
+    missing = [d for d in output_dirs if not d.exists()]
+    if missing:
+        for d in missing:
+            print(f"Directory not found: {d}", file=sys.stderr)
+        return 1
+    report_path = Path(args.output)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    result = generate_merged_report(output_dirs, report_path)
+    print(f"Merged report written to {result}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="judge-eval")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -213,6 +227,12 @@ def build_parser() -> argparse.ArgumentParser:
     report_parser = subparsers.add_parser("report")
     report_parser.add_argument("output_dir")
     report_parser.set_defaults(func=cmd_report)
+
+    merge_parser = subparsers.add_parser("merge")
+    merge_parser.add_argument("output_dirs", nargs="+", help="Two or more experiment output directories to merge")
+    merge_parser.add_argument("--output", default="outputs/merged_report.html", help="Path to write the merged report HTML")
+    merge_parser.set_defaults(func=cmd_merge)
+
     return parser
 
 

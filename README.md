@@ -32,6 +32,16 @@ uv run judge-eval metrics outputs/20260423_cerebras_hosted_2way_free
 uv run judge-eval report outputs/20260423_cerebras_hosted_2way_free
 
 uv run pytest -q
+
+# 여러 실험 결과를 하나의 리포트로 병합한다.
+# 각 output 디렉터리의 metrics_overall.csv를 합쳐 전체 모델 기준으로 재랭킹하고,
+# prompt_sensitivity·dummy_answer_robustness는 해당 데이터가 있는 모델끼리만 표시한다.
+uv run judge-eval merge \
+  outputs/20260421_gemma4_v1 \
+  outputs/20260422_gemma_hosted_4way_free \
+  outputs/20260423_cerebras_hosted_2way_free \
+  outputs/20260424_openai_small_models_4way \
+  --output outputs/merged_report.html
 ```
 
 ## How Sample Counts Work
