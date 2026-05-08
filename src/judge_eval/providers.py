@@ -143,8 +143,9 @@ def _call_chat_completion_provider(model: ModelConfig, prompt: str) -> ProviderR
     payload: dict[str, Any] = {
         "model": model.model or model.model_path or model.name,
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": model.temperature,
     }
+    if model.temperature is not None:
+        payload["temperature"] = model.temperature
     if _uses_openai_chat_completions_contract(model.endpoint):
         payload["max_completion_tokens"] = model.max_tokens
     else:
@@ -228,7 +229,10 @@ def _call_hf_local_provider(model: ModelConfig, prompt: str) -> ProviderResponse
     if generator is None:
         generator = pipeline("text-generation", model=model_id)
         _HF_LOCAL_PIPELINES[model_id] = generator
-    outputs = generator(prompt, max_new_tokens=model.max_tokens, temperature=model.temperature)
+    generation_kwargs: dict[str, Any] = {"max_new_tokens": model.max_tokens}
+    if model.temperature is not None:
+        generation_kwargs["temperature"] = model.temperature
+    outputs = generator(prompt, **generation_kwargs)
     if not outputs or "generated_text" not in outputs[0]:
         raise ProviderError("hf_local provider did not return generated_text")
     generated_text = outputs[0]["generated_text"]

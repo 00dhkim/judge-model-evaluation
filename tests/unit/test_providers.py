@@ -123,6 +123,48 @@ def test_chat_completion_uses_max_tokens_for_non_openai_endpoint(monkeypatch):
     assert "max_completion_tokens" not in payloads[0]
 
 
+def test_chat_completion_omits_temperature_when_unset(monkeypatch):
+    payloads: list[dict] = []
+
+    def fake_post(*args, **kwargs):
+        payloads.append(dict(kwargs["json"]))
+        return SimpleNamespace(
+            status_code=200,
+            json=lambda: {
+                "choices": [{"message": {"content": '{"label": true, "reason": "ok"}'}}],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+            },
+        )
+
+    monkeypatch.setattr("judge_eval.providers.requests.post", fake_post)
+
+    _call_chat_completion_provider(_model(), "prompt")
+
+    assert "temperature" not in payloads[0]
+
+
+def test_chat_completion_sends_temperature_when_explicit(monkeypatch):
+    payloads: list[dict] = []
+    model = _model()
+    model.temperature = 0.0
+
+    def fake_post(*args, **kwargs):
+        payloads.append(dict(kwargs["json"]))
+        return SimpleNamespace(
+            status_code=200,
+            json=lambda: {
+                "choices": [{"message": {"content": '{"label": true, "reason": "ok"}'}}],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+            },
+        )
+
+    monkeypatch.setattr("judge_eval.providers.requests.post", fake_post)
+
+    _call_chat_completion_provider(model, "prompt")
+
+    assert payloads[0]["temperature"] == 0.0
+
+
 def test_estimate_openai_text_cost_uses_cached_and_output_pricing():
     cost = estimate_openai_text_cost(
         "gpt-5.4-mini",

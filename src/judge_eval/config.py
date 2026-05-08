@@ -44,7 +44,7 @@ class ModelConfig(BaseModel):
     model_path: str | None = None
     endpoint: str | None = None
     api_key_env: str | None = None
-    temperature: float = 0.0
+    temperature: float | None = None
     max_tokens: int = 256
     metadata: dict[str, Any] = Field(default_factory=dict)
 

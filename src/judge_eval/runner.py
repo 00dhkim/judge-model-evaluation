@@ -330,18 +330,16 @@ def _run_single_attempt(
                 ) as prompt_span:
                     prompt = build_prompt(**prompt_inputs)
                     prompt_span.set_attributes({"output.value": prompt, "output.mime_type": "text/plain"})
+                invocation_parameters: dict[str, Any] = {
+                    "max_tokens": model_config.max_tokens,
+                }
+                if model_config.temperature is not None:
+                    invocation_parameters["temperature"] = model_config.temperature
                 llm_attributes = {
                     "openinference.span.kind": "LLM",
                     "llm.model_name": model_config.model or model_config.model_path or model_config.name,
                     "llm.provider": provider,
-                    "llm.invocation_parameters": json.dumps(
-                        {
-                            "temperature": model_config.temperature,
-                            "max_tokens": model_config.max_tokens,
-                        },
-                        ensure_ascii=False,
-                        sort_keys=True,
-                    ),
+                    "llm.invocation_parameters": json.dumps(invocation_parameters, ensure_ascii=False, sort_keys=True),
                     "llm.input_messages.0.message.role": "user",
                     "llm.input_messages.0.message.content": prompt,
                     "llm.prompt_template.template": prompt_template,

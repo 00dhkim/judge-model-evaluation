@@ -81,7 +81,7 @@ filter:
 | `model_path` | string | provider에 따라 | — | 로컬 모델 경로 또는 HuggingFace ID. `hf_local`에서 `model`과 택일. |
 | `endpoint` | string | provider에 따라 | — | HTTP 엔드포인트 URL. `openai_compatible`, `vllm`, `custom_http`에서 필수. |
 | `api_key_env` | string | 선택 | — | API 키를 담은 **환경변수 이름**. 값 자체가 아닌 변수명을 씁니다. |
-| `temperature` | float | 선택 | `0.0` | 샘플링 온도. judge 평가는 `0.0` 권장. |
+| `temperature` | float | 선택 | provider 기본값 | 생략하면 요청 payload에 포함하지 않아 provider/model 기본값을 사용합니다. |
 | `max_tokens` | int | 선택 | `256` | 생성 최대 토큰 수. |
 | `metadata` | object | 선택 | `{}` | 임의 키-값. `dummy` provider의 `dummy_strategy` 등에 사용. |
 
