@@ -221,3 +221,31 @@ def test_chat_completion_sets_estimated_cost_for_openai_endpoint(monkeypatch):
     response = _call_chat_completion_provider(_openai_model(), "prompt")
 
     assert response.estimated_cost == pytest.approx(0.0015825)
+
+
+def test_chat_completion_sets_estimated_cost_for_configured_openai_compatible_model(monkeypatch):
+    model = ModelConfig(
+        name="grok_4_3",
+        provider="openai_compatible",
+        model="x-ai/grok-4.3",
+        endpoint="https://openrouter.ai/api/v1/chat/completions",
+    )
+
+    def fake_post(*args, **kwargs):
+        return SimpleNamespace(
+            status_code=200,
+            json=lambda: {
+                "choices": [{"message": {"content": '{"label": true, "reason": "ok"}'}}],
+                "usage": {
+                    "prompt_tokens": 1_000_000,
+                    "completion_tokens": 1_000_000,
+                    "prompt_tokens_details": {"cached_tokens": 100_000},
+                },
+            },
+        )
+
+    monkeypatch.setattr("judge_eval.providers.requests.post", fake_post)
+
+    response = _call_chat_completion_provider(model, "prompt")
+
+    assert response.estimated_cost == pytest.approx(3.645)

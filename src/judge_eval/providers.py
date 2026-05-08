@@ -29,14 +29,38 @@ class ProviderError(RuntimeError):
     pass
 
 
-OPENAI_TEXT_PRICING_PER_1M: dict[str, dict[str, float]] = {
+TEXT_PRICING_PER_1M: dict[str, dict[str, float]] = {
+    # Official OpenAI API pricing.
     "gpt-4.1": {"input": 2.00, "cached_input": 0.50, "output": 8.00},
     "gpt-4.1-mini": {"input": 0.40, "cached_input": 0.10, "output": 1.60},
     "gpt-4.1-nano": {"input": 0.10, "cached_input": 0.025, "output": 0.40},
     "gpt-5.4": {"input": 2.50, "cached_input": 0.25, "output": 15.00},
     "gpt-5.4-mini": {"input": 0.75, "cached_input": 0.075, "output": 4.50},
     "gpt-5.4-nano": {"input": 0.20, "cached_input": 0.02, "output": 1.25},
+    # Official OpenRouter model pricing from https://openrouter.ai/api/v1/models.
+    "openai/gpt-5.5": {"input": 5.00, "cached_input": 0.50, "output": 30.00},
+    "anthropic/claude-opus-4.7": {"input": 5.00, "cached_input": 0.50, "output": 25.00},
+    "anthropic/claude-sonnet-4.6": {"input": 3.00, "cached_input": 0.30, "output": 15.00},
+    "google/gemini-3.1-pro-preview": {"input": 2.00, "cached_input": 0.20, "output": 12.00},
+    "google/gemini-3-flash-preview": {"input": 0.50, "cached_input": 0.05, "output": 3.00},
+    "x-ai/grok-4.3": {"input": 1.25, "cached_input": 0.20, "output": 2.50},
+    "moonshotai/kimi-k2.6": {"input": 0.75, "cached_input": 0.15, "output": 3.50},
+    "deepseek/deepseek-v4-pro": {"input": 0.435, "cached_input": 0.003625, "output": 0.87},
+    "deepseek/deepseek-v4-flash": {"input": 0.14, "cached_input": 0.0028, "output": 0.28},
+    "qwen/qwen3.6-max-preview": {"input": 1.04, "output": 6.24},
+    "qwen/qwen3.6-plus": {"input": 0.325, "output": 1.95},
+    "openai/gpt-oss-120b": {"input": 0.039, "output": 0.18},
+    "xiaomi/mimo-v2.5-pro": {"input": 1.00, "cached_input": 0.20, "output": 3.00},
+    "z-ai/glm-5.1": {"input": 1.05, "cached_input": 0.525, "output": 3.50},
+    "nvidia/nemotron-3-super-120b-a12b": {"input": 0.09, "output": 0.45},
+    # Official direct-provider pricing.
+    # Upstage pricing: https://www.upstage.ai/pricing.
+    "solar-pro3": {"input": 0.15, "cached_input": 0.015, "output": 0.60},
+    # Friendli pricing: https://friendli.ai/pricing/dedicated-endpoints.
+    "LGAI-EXAONE/K-EXAONE-236B-A23B": {"input": 0.20, "output": 0.80},
 }
+
+OPENAI_TEXT_PRICING_PER_1M = TEXT_PRICING_PER_1M
 
 
 def call_provider(model: ModelConfig, prompt: str) -> ProviderResponse:
@@ -110,7 +134,7 @@ def _uses_openai_chat_completions_contract(endpoint: str) -> bool:
 def estimate_openai_text_cost(model_name: str | None, usage: dict[str, Any]) -> float | None:
     if not model_name:
         return None
-    pricing = OPENAI_TEXT_PRICING_PER_1M.get(model_name)
+    pricing = TEXT_PRICING_PER_1M.get(model_name)
     if pricing is None:
         return None
     prompt_tokens = usage.get("prompt_tokens")
@@ -120,11 +144,14 @@ def estimate_openai_text_cost(model_name: str | None, usage: dict[str, Any]) -> 
     prompt_details = usage.get("prompt_tokens_details", {})
     cached_tokens = prompt_details.get("cached_tokens", 0) if isinstance(prompt_details, dict) else 0
     if not isinstance(cached_tokens, int):
+        cached_tokens = usage.get("input_cache_read_tokens", 0)
+    if not isinstance(cached_tokens, int):
         cached_tokens = 0
     uncached_tokens = max(prompt_tokens - cached_tokens, 0)
+    cached_input_price = pricing.get("cached_input", pricing["input"])
     return (
         (uncached_tokens / 1_000_000) * pricing["input"]
-        + (cached_tokens / 1_000_000) * pricing["cached_input"]
+        + (cached_tokens / 1_000_000) * cached_input_price
         + (completion_tokens / 1_000_000) * pricing["output"]
     )
 
@@ -176,7 +203,7 @@ def _call_chat_completion_provider(model: ModelConfig, prompt: str) -> ProviderR
             f"(finish_reason={finish_reason!r}, message_keys={message_keys})"
         )
     usage = data.get("usage", {})
-    estimated_cost = estimate_openai_text_cost(model.model, usage) if _uses_openai_chat_completions_contract(model.endpoint) else None
+    estimated_cost = estimate_openai_text_cost(model.model, usage)
     return ProviderResponse(
         raw_output=choice,
         latency_ms=int((time.perf_counter() - started) * 1000),

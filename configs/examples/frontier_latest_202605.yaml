@@ -1,7 +1,7 @@
 experiment_name: frontier_latest_202605
 # Cost estimate basis: 196,564 input tokens and 41,867 output tokens per model,
 # copied from the last completed 1,200-row run.
-# Estimated total for all 17 configured models: $8.937041 per run.
+# Estimated total for all 17 configured models: $8.876374 per run.
 datasets:
   - name: evouna_tq
     path: data/EVOUNA/TQ.json
@@ -69,7 +69,7 @@ judge_models:
     api_key_env: OPENROUTER_API_KEY
     max_tokens: 512
 
-  # Price: $0.95/M input, $4/M output; estimated run cost: $0.354204.
+  # Price: $0.75/M input, $3.50/M output; estimated run cost: $0.293957.
   - name: kimi_k2_6
     provider: openai_compatible
     model: moonshotai/kimi-k2.6
@@ -110,7 +110,7 @@ judge_models:
     api_key_env: OPENROUTER_API_KEY
     max_tokens: 512
 
-  # Price: $0.039/M input, $0.190/M output; estimated run cost: $0.015621.
+  # Price: $0.039/M input, $0.180/M output; estimated run cost: $0.015202.
   - name: gpt_oss_120b
     provider: openai_compatible
     model: openai/gpt-oss-120b
