@@ -165,6 +165,30 @@ def test_chat_completion_sends_temperature_when_explicit(monkeypatch):
     assert payloads[0]["temperature"] == 0.0
 
 
+def test_chat_completion_raises_provider_error_for_missing_content(monkeypatch):
+    def fake_post(*args, **kwargs):
+        return SimpleNamespace(
+            status_code=200,
+            json=lambda: {
+                "choices": [
+                    {
+                        "finish_reason": "length",
+                        "message": {
+                            "role": "assistant",
+                            "reasoning": "thinking only",
+                        },
+                    }
+                ],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 512},
+            },
+        )
+
+    monkeypatch.setattr("judge_eval.providers.requests.post", fake_post)
+
+    with pytest.raises(ProviderError, match="missing string message.content"):
+        _call_chat_completion_provider(_model(), "prompt")
+
+
 def test_estimate_openai_text_cost_uses_cached_and_output_pricing():
     cost = estimate_openai_text_cost(
         "gpt-5.4-mini",

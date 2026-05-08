@@ -166,7 +166,15 @@ def _call_chat_completion_provider(model: ModelConfig, prompt: str) -> ProviderR
     if response.status_code >= 400:
         raise ProviderError(f"provider call failed: {response.status_code} {response.text}")
     data = response.json()
-    choice = data["choices"][0]["message"]["content"]
+    message = data["choices"][0].get("message", {})
+    choice = message.get("content") if isinstance(message, dict) else None
+    if not isinstance(choice, str):
+        finish_reason = data["choices"][0].get("finish_reason")
+        message_keys = sorted(message.keys()) if isinstance(message, dict) else []
+        raise ProviderError(
+            "chat completion response missing string message.content "
+            f"(finish_reason={finish_reason!r}, message_keys={message_keys})"
+        )
     usage = data.get("usage", {})
     estimated_cost = estimate_openai_text_cost(model.model, usage) if _uses_openai_chat_completions_contract(model.endpoint) else None
     return ProviderResponse(
