@@ -1,0 +1,12 @@
+dataset_hash: 2336064638c020996c68f882788c7fc26c45fda7e0fdc46bf645d573c408ed6c
+row_count: 1200
+filter_policy:
+  exclude_improper: true
+  exclude_non_boolean_labels: true
+  exclude_empty_candidate_answers: true
+answer_sources:
+- fid
+- gpt35
+- chatgpt
+- gpt4
+- newbing

@@ -70,12 +70,12 @@ judge_models:
     max_tokens: 512
 
   # Price: $0.75/M input, $3.50/M output; estimated run cost: $0.293957.
-  - name: kimi_k2_6
-    provider: openai_compatible
-    model: moonshotai/kimi-k2.6
-    endpoint: https://openrouter.ai/api/v1/chat/completions
-    api_key_env: OPENROUTER_API_KEY
-    max_tokens: 512
+  # - name: kimi_k2_6
+  #   provider: openai_compatible
+  #   model: moonshotai/kimi-k2.6
+  #   endpoint: https://openrouter.ai/api/v1/chat/completions
+  #   api_key_env: OPENROUTER_API_KEY
+  #   max_tokens: 512
 
   # DeepSeek direct and OpenRouter currently expose the same token pricing.
   # Price: $0.435/M input, $0.87/M output with current discount; estimated run cost: $0.121930.
@@ -119,12 +119,12 @@ judge_models:
     max_tokens: 512
 
   # Price: $1/M input, $3/M output; estimated run cost: $0.322165.
-  - name: mimo_v2_5_pro
-    provider: openai_compatible
-    model: xiaomi/mimo-v2.5-pro
-    endpoint: https://openrouter.ai/api/v1/chat/completions
-    api_key_env: OPENROUTER_API_KEY
-    max_tokens: 512
+  # - name: mimo_v2_5_pro
+  #   provider: openai_compatible
+  #   model: xiaomi/mimo-v2.5-pro
+  #   endpoint: https://openrouter.ai/api/v1/chat/completions
+  #   api_key_env: OPENROUTER_API_KEY
+  #   max_tokens: 512
 
   # Price: $1.05/M input, $3.50/M output; estimated run cost: $0.352927.
   - name: glm_5_1
