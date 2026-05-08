@@ -432,8 +432,9 @@ def _run_single_attempt(
                 if parsed["parse_method"] != "invalid":
                     return record
                 warnings.warn(f"Invalid output for unit {unit_key} on attempt {retry_count + 1}", stacklevel=2)
-            except ProviderError as exc:
-                record = _build_attempt_record(
+            except Exception as exc:
+                error_message = f"{type(exc).__name__}: {exc}"
+                record = _build_error_attempt_record(
                     config=config,
                     sample=sample,
                     model_family=model_family,
@@ -445,34 +446,69 @@ def _run_single_attempt(
                     unit_key=unit_key,
                     retry_count=retry_count,
                     span_ids=span_ids,
-                    judge_reason=None,
-                    parsed_label=None,
-                    parse_status="error",
-                    raw_output="",
-                    latency_ms=None,
-                    input_tokens=None,
-                    output_tokens=None,
-                    estimated_cost=None,
-                    error_message=str(exc),
+                    error_message=error_message,
                 )
-                span_ids.set_attributes(
-                    {
-                        **json_io_attributes(
-                            "output",
-                            {
-                                "judge_reason": None,
-                                "parsed_label": None,
-                                "parse_status": "error",
-                                "error_message": str(exc),
-                            },
-                        ),
-                        "eval.explanation": str(exc),
-                    }
-                )
+                _set_error_span_attributes(span_ids, error_message)
                 raw_handle.write(json.dumps(record, ensure_ascii=False) + "\n")
                 raw_handle.flush()
                 last_record = record
     return last_record or {}
+
+
+def _build_error_attempt_record(
+    *,
+    config: ExperimentConfig,
+    sample: dict[str, Any],
+    model_family: str,
+    model_name: str,
+    provider: str,
+    prompt_template: str,
+    config_hash_value: str,
+    dataset_hash: str,
+    unit_key: str,
+    retry_count: int,
+    span_ids: TelemetryIds,
+    error_message: str,
+) -> dict[str, Any]:
+    return _build_attempt_record(
+        config=config,
+        sample=sample,
+        model_family=model_family,
+        model_name=model_name,
+        provider=provider,
+        prompt_template=prompt_template,
+        config_hash_value=config_hash_value,
+        dataset_hash=dataset_hash,
+        unit_key=unit_key,
+        retry_count=retry_count,
+        span_ids=span_ids,
+        judge_reason=None,
+        parsed_label=None,
+        parse_status="error",
+        raw_output="",
+        latency_ms=None,
+        input_tokens=None,
+        output_tokens=None,
+        estimated_cost=None,
+        error_message=error_message,
+    )
+
+
+def _set_error_span_attributes(span_ids: TelemetryIds, error_message: str) -> None:
+    span_ids.set_attributes(
+        {
+            **json_io_attributes(
+                "output",
+                {
+                    "judge_reason": None,
+                    "parsed_label": None,
+                    "parse_status": "error",
+                    "error_message": error_message,
+                },
+            ),
+            "eval.explanation": error_message,
+        }
+    )
 
 
 def _build_attempt_record(

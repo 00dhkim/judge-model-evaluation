@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from judge_eval.config import ExperimentConfig
 from judge_eval.runner import (
     final_predictions_from_raw_jsonl,
     failed_unit_keys_from_raw_jsonl,
@@ -9,6 +10,7 @@ from judge_eval.runner import (
     finalized_keys_from_raw_jsonl,
     load_raw_predictions,
     prepare_predictions_for_parquet,
+    run_predictions,
 )
 
 
@@ -148,3 +150,78 @@ def test_failed_unit_keys_from_raw_jsonl_uses_final_status_per_unit(tmp_path: Pa
     )
 
     assert failed_unit_keys_from_raw_jsonl(raw_path) == {"u2", "u3"}
+
+
+def test_run_predictions_records_parse_exception_and_continues(tmp_path: Path, monkeypatch):
+    config = ExperimentConfig.model_validate(
+        {
+            "experiment_name": "unit_error",
+            "datasets": [{"name": "unused", "path": "unused.json"}],
+            "judge_models": [
+                {
+                    "name": "heuristic_dummy",
+                    "provider": "dummy",
+                    "metadata": {"dummy_strategy": "heuristic"},
+                }
+            ],
+            "evaluation": {
+                "prompt_templates": ["minimal"],
+                "retry_count": 0,
+                "enable_prompt_sensitivity": False,
+                "enable_reference_order_sensitivity": False,
+                "enable_dummy_answer_test": False,
+            },
+            "output": {"experiment_name": "unit_error", "base_dir": str(tmp_path)},
+            "telemetry": {"enabled": False},
+        }
+    )
+    samples = pd.DataFrame(
+        [
+            {
+                "sample_id": "s1",
+                "question": "What element is named after Berkeley?",
+                "golden_answer": "Berkelium",
+                "golden_aliases": ["Berkelium"],
+                "candidate_answer": "Berkelium",
+                "human_label": True,
+                "dataset": "TQ",
+                "answer_source": "fid",
+                "answer_length_bucket": "short",
+                "golden_answer_alias_count": 1,
+            },
+            {
+                "sample_id": "s2",
+                "question": "What element is named after Berkeley?",
+                "golden_answer": "Berkelium",
+                "golden_aliases": ["Berkelium"],
+                "candidate_answer": "Berkelium",
+                "human_label": True,
+                "dataset": "TQ",
+                "answer_source": "fid",
+                "answer_length_bucket": "short",
+                "golden_answer_alias_count": 1,
+            },
+        ]
+    )
+    calls = {"count": 0}
+
+    def flaky_parse(raw_output: str):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise RuntimeError("parser exploded")
+        return {"parse_method": "json", "parsed_label": True, "judge_reason": "ok"}
+
+    monkeypatch.setattr("judge_eval.runner.parse_model_output", flaky_parse)
+
+    parsed = run_predictions(
+        config=config,
+        normalized_samples=samples,
+        output_dir=tmp_path,
+        config_hash_value="config-hash",
+        dataset_hash="dataset-hash",
+        resolved_config={},
+    )
+
+    assert parsed["parse_status"].tolist() == ["error", "ok"]
+    assert "RuntimeError: parser exploded" in parsed["error_message"].iloc[0]
+    assert failed_unit_keys_from_raw_jsonl(tmp_path / "raw_predictions.jsonl") == {parsed["unit_key"].iloc[0]}
