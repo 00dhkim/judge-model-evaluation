@@ -77,22 +77,21 @@ judge_models:
     api_key_env: OPENROUTER_API_KEY
     max_tokens: 512
 
-  # DeepSeek direct is cheaper than the OpenRouter route at current pricing.
-  # Set DEEPSEEK_API_KEY.
+  # DeepSeek direct and OpenRouter currently expose the same token pricing.
   # Price: $0.435/M input, $0.87/M output with current discount; estimated run cost: $0.121930.
   - name: deepseek_v4_pro
     provider: openai_compatible
-    model: deepseek-v4-pro
-    endpoint: https://api.deepseek.com/v1/chat/completions
-    api_key_env: DEEPSEEK_API_KEY
+    model: deepseek/deepseek-v4-pro
+    endpoint: https://openrouter.ai/api/v1/chat/completions
+    api_key_env: OPENROUTER_API_KEY
     max_tokens: 512
 
   # Price: $0.14/M input, $0.28/M output; estimated run cost: $0.039242.
   - name: deepseek_v4_flash
     provider: openai_compatible
-    model: deepseek-v4-flash
-    endpoint: https://api.deepseek.com/v1/chat/completions
-    api_key_env: DEEPSEEK_API_KEY
+    model: deepseek/deepseek-v4-flash
+    endpoint: https://openrouter.ai/api/v1/chat/completions
+    api_key_env: OPENROUTER_API_KEY
     max_tokens: 512
 
   # Price: $1.04/M input, $6.24/M output; estimated run cost: $0.465677.
@@ -146,19 +145,19 @@ judge_models:
   # Price: $0.15/M input, $0.60/M output; estimated run cost: $0.054605.
   - name: solar_pro_3
     provider: openai_compatible
-    model: upstage/solar-pro-3
-    endpoint: https://openrouter.ai/api/v1/chat/completions
-    api_key_env: OPENROUTER_API_KEY
+    model: solar-pro3
+    endpoint: https://api.upstage.ai/v1/chat/completions
+    api_key_env: UPSTAGE_API_KEY
     max_tokens: 512
 
-  # Friendli direct has clear pricing for K-EXAONE. Set FRIENDLI_TOKEN.
+  # Friendli direct has clear pricing for K-EXAONE. Set FRIENDLI_API_KEY.
   # Price: $0.20/M input, $0.80/M output; estimated run cost: $0.072806.
   - name: k_exaone_236b_a23b
     provider: openai_compatible
     model: LGAI-EXAONE/K-EXAONE-236B-A23B
     endpoint: https://api.friendli.ai/serverless/v1/chat/completions
-    api_key_env: FRIENDLI_TOKEN
-    max_tokens: 512
+    api_key_env: FRIENDLI_API_KEY
+    max_tokens: 8192
 
 evaluation:
   prompt_templates:
