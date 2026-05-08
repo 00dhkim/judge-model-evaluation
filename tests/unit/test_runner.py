@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from judge_eval.config import ExperimentConfig
 from judge_eval.runner import (
@@ -213,14 +214,15 @@ def test_run_predictions_records_parse_exception_and_continues(tmp_path: Path, m
 
     monkeypatch.setattr("judge_eval.runner.parse_model_output", flaky_parse)
 
-    parsed = run_predictions(
-        config=config,
-        normalized_samples=samples,
-        output_dir=tmp_path,
-        config_hash_value="config-hash",
-        dataset_hash="dataset-hash",
-        resolved_config={},
-    )
+    with pytest.warns(UserWarning, match="Error output for unit .* model heuristic_dummy .* RuntimeError: parser exploded"):
+        parsed = run_predictions(
+            config=config,
+            normalized_samples=samples,
+            output_dir=tmp_path,
+            config_hash_value="config-hash",
+            dataset_hash="dataset-hash",
+            resolved_config={},
+        )
 
     assert parsed["parse_status"].tolist() == ["error", "ok"]
     assert "RuntimeError: parser exploded" in parsed["error_message"].iloc[0]
