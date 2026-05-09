@@ -152,12 +152,12 @@ judge_models:
 
   # Friendli direct has clear pricing for K-EXAONE. Set FRIENDLI_API_KEY.
   # Price: $0.20/M input, $0.80/M output; estimated run cost: $0.072806.
-  - name: k_exaone_236b_a23b
-    provider: openai_compatible
-    model: LGAI-EXAONE/K-EXAONE-236B-A23B
-    endpoint: https://api.friendli.ai/serverless/v1/chat/completions
-    api_key_env: FRIENDLI_API_KEY
-    max_tokens: 8192
+  # - name: k_exaone_236b_a23b
+  #   provider: openai_compatible
+  #   model: LGAI-EXAONE/K-EXAONE-236B-A23B
+  #   endpoint: https://api.friendli.ai/serverless/v1/chat/completions
+  #   api_key_env: FRIENDLI_API_KEY
+  #   max_tokens: 8192
 
 evaluation:
   prompt_templates:
