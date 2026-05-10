@@ -508,6 +508,81 @@ def _plot_scatter(x: list[float], y: list[float], labels: list[str], xlabel: str
     return _fig_to_base64(fig)
 
 
+def _plot_performance_efficiency_html(
+    labels: Sequence[str],
+    latency: Sequence[float],
+    cost: Sequence[float],
+    scotts_pi: Sequence[float],
+    point_colors: Sequence[str] | None = None,
+) -> str:
+    """Return an interactive Plotly.js 2-panel HTML snippet (latency vs π, cost vs π)."""
+    import json
+    import uuid
+
+    uid = uuid.uuid4().hex[:8]
+    colors = list(point_colors) if point_colors else [_EXP_COLORS[i % len(_EXP_COLORS)] for i in range(len(labels))]
+    lat_list = [float(v) for v in latency]
+    cost_list = [float(v) for v in cost]
+    pi_list = [float(v) for v in scotts_pi]
+    label_list = list(labels)
+
+    pi_min = max(0.0, min(pi_list, default=0.0) - 0.05)
+    pi_max = min(1.0, max(pi_list, default=1.0) + 0.05)
+
+    trace1 = {
+        "type": "scatter", "mode": "markers+text",
+        "x": lat_list, "y": pi_list, "text": label_list,
+        "textposition": "top right", "textfont": {"size": 9},
+        "marker": {"size": 10, "color": colors, "opacity": 0.85},
+        "xaxis": "x", "yaxis": "y", "showlegend": False,
+        "hovertemplate": "<b>%{text}</b><br>Latency: %{x:,.0f} ms<br>Scott’s π: %{y:.3f}<extra></extra>",
+    }
+    trace2 = {
+        "type": "scatter", "mode": "markers+text",
+        "x": cost_list, "y": pi_list, "text": label_list,
+        "textposition": "top right", "textfont": {"size": 9},
+        "marker": {"size": 10, "color": colors, "opacity": 0.85},
+        "xaxis": "x2", "yaxis": "y2", "showlegend": False,
+        "hovertemplate": "<b>%{text}</b><br>Cost: $%{x:.5f}<br>Scott’s π: %{y:.3f}<extra></extra>",
+    }
+    layout = {
+        "grid": {"rows": 1, "columns": 2, "pattern": "independent"},
+        "xaxis": {"title": "평균 지연 시간 (ms)", "zeroline": False},
+        "yaxis": {"title": "Scott’s π (성능)", "range": [pi_min, pi_max]},
+        "xaxis2": {"title": "추정 비용 (USD)", "zeroline": False},
+        "yaxis2": {"title": "Scott’s π (성능)", "range": [pi_min, pi_max]},
+        "annotations": [
+            {"text": "빠르고 좋은 모델 (지연↓, 성능↑)", "xref": "paper", "yref": "paper",
+             "x": 0.22, "y": 1.07, "showarrow": False, "font": {"size": 12, "color": "#333"}},
+            {"text": "싸고 좋은 모델 (비용↓, 성능↑)", "xref": "paper", "yref": "paper",
+             "x": 0.78, "y": 1.07, "showarrow": False, "font": {"size": 12, "color": "#333"}},
+        ],
+        "height": 460,
+        "margin": {"t": 70, "b": 70, "l": 70, "r": 20},
+        "hovermode": "closest",
+        "paper_bgcolor": "white",
+        "plot_bgcolor": "#fafafa",
+    }
+    config = {"responsive": True, "displayModeBar": True,
+              "modeBarButtonsToRemove": ["lasso2d", "select2d"]}
+
+    data_json = json.dumps([trace1, trace2])
+    layout_json = json.dumps(layout)
+    config_json = json.dumps(config)
+
+    return f"""<div id="plotly-{uid}" style="width:100%;height:470px;"></div>
+<script>
+(function(){{
+  function render(){{Plotly.newPlot('plotly-{uid}',{data_json},{layout_json},{config_json});}}
+  if(typeof Plotly==='undefined'){{
+    var s=document.createElement('script');
+    s.src='https://cdn.plot.ly/plotly-latest.min.js';
+    s.onload=render;document.head.appendChild(s);
+  }}else{{render();}}
+}})();
+</script>"""
+
+
 def _plot_performance_efficiency(
     labels: Sequence[str],
     latency: Sequence[float],
@@ -905,7 +980,11 @@ def _exp_color_map(exp_names: list[str]) -> dict[str, str]:
     return {name: _EXP_COLORS[i % len(_EXP_COLORS)] for i, name in enumerate(sorted(set(exp_names)))}
 
 
-def generate_merged_report(output_dirs: list[Path], report_path: Path) -> Path:
+def generate_merged_report(
+    output_dirs: list[Path],
+    report_path: Path,
+    exclude_models: set[str] | None = None,
+) -> Path:
     import yaml
 
     all_metrics: list[pd.DataFrame] = []
@@ -914,8 +993,13 @@ def generate_merged_report(output_dirs: list[Path], report_path: Path) -> Path:
     all_rankings: list[pd.DataFrame] = []
     exp_names: list[str] = []
 
+    def _filter(df: pd.DataFrame) -> pd.DataFrame:
+        if exclude_models and "judge_model" in df.columns:
+            return df[~df["judge_model"].isin(exclude_models)].reset_index(drop=True)
+        return df
+
     for output_dir in output_dirs:
-        metrics = _safe_read_csv(output_dir / "metrics_overall.csv")
+        metrics = _filter(_safe_read_csv(output_dir / "metrics_overall.csv"))
         if metrics.empty:
             continue
         exp_name = output_dir.name
@@ -931,17 +1015,17 @@ def generate_merged_report(output_dirs: list[Path], report_path: Path) -> Path:
         all_metrics.append(metrics)
         exp_names.append(exp_name)
 
-        ps = _safe_read_csv(output_dir / "prompt_sensitivity.csv")
+        ps = _filter(_safe_read_csv(output_dir / "prompt_sensitivity.csv"))
         if not ps.empty:
             ps["experiment"] = exp_name
             all_prompt_sensitivity.append(ps)
 
-        dr = _safe_read_csv(output_dir / "dummy_answer_robustness.csv")
+        dr = _filter(_safe_read_csv(output_dir / "dummy_answer_robustness.csv"))
         if not dr.empty:
             dr["experiment"] = exp_name
             all_dummy_robustness.append(dr)
 
-        rankings = _safe_read_csv(output_dir / "model_rankings.csv")
+        rankings = _filter(_safe_read_csv(output_dir / "model_rankings.csv"))
         if not rankings.empty:
             rankings["experiment"] = exp_name
             all_rankings.append(rankings)
@@ -983,7 +1067,19 @@ def generate_merged_report(output_dirs: list[Path], report_path: Path) -> Path:
     lat = merged_metrics["avg_latency_ms"].fillna(0).tolist() if has_latency else [0] * len(merged_metrics)
     cost = merged_metrics["total_estimated_cost"].fillna(0).tolist() if has_cost else [0] * len(merged_metrics)
     merged_perf = merged_metrics["scotts_pi"].fillna(0).tolist()
-    plots["cost_latency"] = _plot_performance_efficiency(all_labels, lat, cost, merged_perf)
+    exp_point_colors = [color_map.get(e, "#4C8BF5") for e in merged_metrics["experiment"].tolist()]
+    plots_html: dict[str, str] = {}
+    plots_html["cost_latency"] = _plot_performance_efficiency_html(all_labels, lat, cost, merged_perf, exp_point_colors)
+
+    if {"human_score", "judge_score"}.issubset(merged_metrics.columns):
+        plots["judge_vs_human"] = _plot_scatter(
+            merged_metrics["human_score"].fillna(0).tolist(),
+            merged_metrics["judge_score"].fillna(0).tolist(),
+            all_labels,
+            "Human Score",
+            "Judge Score",
+            "Judge Score vs Human Score",
+        )
 
     from judge_eval.metrics import compute_rankings
     global_rankings = compute_rankings(merged_metrics)
@@ -1017,13 +1113,14 @@ def generate_merged_report(output_dirs: list[Path], report_path: Path) -> Path:
         return f'<section class="section-block"><h2>{title}</h2>{content}</section>'
 
     def chart_section(title: str, plot_key: str, desc: str = "") -> str:
-        img = plots.get(plot_key, "")
-        img_tag = (
-            f'<div class="chart-wrap"><img src="data:image/png;base64,{img}" alt="{title}" /></div>'
-            if img else "<p class='no-data'>데이터 없음</p>"
-        )
+        if plot_key in plots_html:
+            content = f'<div class="chart-wrap">{plots_html[plot_key]}</div>'
+        elif plot_key in plots:
+            content = f'<div class="chart-wrap"><img src="data:image/png;base64,{plots[plot_key]}" alt="{title}" /></div>'
+        else:
+            content = "<p class='no-data'>데이터 없음</p>"
         desc_tag = f'<p class="metric-desc">{desc}</p>' if desc else ""
-        return f'<section class="metric-card"><h2>{title}</h2>{desc_tag}{img_tag}</section>'
+        return f'<section class="metric-card"><h2>{title}</h2>{desc_tag}{content}</section>'
 
     display_cols = ["experiment", "judge_model", "prompt_template", "scotts_pi", "percent_agreement", "precision", "recall", "f1", "fpr", "fnr", "score_delta", "invalid_rate", "total_estimated_cost"]
     display_cols = [c for c in display_cols if c in merged_metrics.columns]
@@ -1066,6 +1163,14 @@ def generate_merged_report(output_dirs: list[Path], report_path: Path) -> Path:
             chart_section("Dummy Answer Robustness", "dummy_robustness", METRIC_DESCRIPTIONS["dummy_robustness"]["desc"])
             + section("더미 응답 상세", _html_table(merged_dr))
         ) if not merged_dr.empty else section("더미 응답 강건성", "<p class='no-data'>해당 데이터 없음</p>"),
+        '<h1 class="section-title">Judge vs Human Score</h1>',
+        section(
+            "Judge Score vs Human Score",
+            (
+                f'<div class="chart-wrap"><img src="data:image/png;base64,{plots["judge_vs_human"]}" /></div>'
+                if "judge_vs_human" in plots else "<p class='no-data'>데이터 없음</p>"
+            ),
+        ),
         '<h1 class="section-title">전체 메트릭 테이블</h1>',
         section("All Metrics (Scott's π 내림차순)", _html_table(table_df)),
     ]
@@ -1113,6 +1218,7 @@ def generate_report(output_dir: Path) -> Path:
     # Build all plots as base64
     # ------------------------------------------------------------------
     plots: dict[str, str] = {}
+    plots_html: dict[str, str] = {}
 
     if not metrics.empty:
         labels = (metrics["judge_model"] + ":" + metrics["prompt_template"]).tolist()
@@ -1153,7 +1259,7 @@ def generate_report(output_dir: Path) -> Path:
         lat = metrics["avg_latency_ms"].fillna(0).tolist() if has_latency else [0] * n
         cost = metrics["total_estimated_cost"].fillna(0).tolist() if has_cost else [0] * n
         perf = metrics["scotts_pi"].fillna(0).tolist()
-        plots["cost_latency"] = _plot_performance_efficiency(labels, lat, cost, perf)
+        plots_html["cost_latency"] = _plot_performance_efficiency_html(labels, lat, cost, perf)
 
     if not prompt_sensitivity.empty:
         pivot = prompt_sensitivity.pivot_table(
@@ -1236,8 +1342,12 @@ def generate_report(output_dir: Path) -> Path:
 
     def metric_section(key: str, plot_key: str) -> str:
         m = METRIC_DESCRIPTIONS[key]
-        img = plots.get(plot_key, "")
-        img_tag = f'<div class="chart-wrap"><img src="data:image/png;base64,{img}" alt="{m["title"]}" /></div>' if img else "<p class='no-data'>차트 없음</p>"
+        if plot_key in plots_html:
+            chart = f'<div class="chart-wrap">{plots_html[plot_key]}</div>'
+        elif plot_key in plots:
+            chart = f'<div class="chart-wrap"><img src="data:image/png;base64,{plots[plot_key]}" alt="{m["title"]}" /></div>'
+        else:
+            chart = "<p class='no-data'>차트 없음</p>"
         return f"""
         <section class="metric-card">
           <h2>{m['title']}</h2>
@@ -1247,7 +1357,7 @@ def generate_report(output_dir: Path) -> Path:
             <span class="badge badge-warn">▼ {m['low']}</span>
             <span class="badge badge-info">기준: {m['threshold']}</span>
           </div>
-          {img_tag}
+          {chart}
         </section>
 """
 

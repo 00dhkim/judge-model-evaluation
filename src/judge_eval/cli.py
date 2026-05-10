@@ -193,7 +193,8 @@ def cmd_merge(args: argparse.Namespace) -> int:
         return 1
     report_path = Path(args.output)
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    result = generate_merged_report(output_dirs, report_path)
+    exclude = set(args.exclude_models) if args.exclude_models else None
+    result = generate_merged_report(output_dirs, report_path, exclude_models=exclude)
     print(f"Merged report written to {result}")
     return 0
 
@@ -228,9 +229,13 @@ def build_parser() -> argparse.ArgumentParser:
     report_parser.add_argument("output_dir")
     report_parser.set_defaults(func=cmd_report)
 
-    merge_parser = subparsers.add_parser("merge")
+    merge_parser = subparsers.add_parser("merge", help="Merge multiple experiment outputs into one HTML report")
     merge_parser.add_argument("output_dirs", nargs="+", help="Two or more experiment output directories to merge")
     merge_parser.add_argument("--output", default="outputs/merged_report.html", help="Path to write the merged report HTML")
+    merge_parser.add_argument(
+        "--exclude-models", nargs="*", metavar="MODEL",
+        help="Judge model names to exclude (e.g. kimi_k2_6 mimo_v2_5_pro)",
+    )
     merge_parser.set_defaults(func=cmd_merge)
 
     return parser
