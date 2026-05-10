@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import io
+from collections.abc import Sequence
 from pathlib import Path
 import warnings
 
@@ -152,10 +153,13 @@ METRIC_DESCRIPTIONS: dict[str, dict[str, str]] = {
         "threshold": "≥ 0.90 이면 양호",
     },
     "cost_latency": {
-        "title": "Cost / Latency Trade-off",
-        "desc": "Judge 모델의 평균 추론 지연(ms)과 총 추정 비용의 trade-off를 보여줍니다.",
-        "high": "비용·지연이 낮으면서 성능(Scott's π)이 높은 우측 상단이 이상적",
-        "low": "비용이 높고 성능이 낮으면 비효율적",
+        "title": "Performance vs Latency / Cost",
+        "desc": (
+            "좌: 지연 시간(ms)이 낮으면서 Scott's π가 높은 모델이 '빠르고 좋은' 모델 (좌상단). "
+            "우: 비용이 낮으면서 Scott's π가 높은 모델이 '싸고 좋은' 모델 (좌상단)."
+        ),
+        "high": "좌상단에 위치할수록 좋음 — 낮은 지연/비용 + 높은 성능",
+        "low": "우하단에 위치할수록 나쁨 — 느리거나 비싸면서 성능도 낮음",
         "threshold": "운영 목적에 따라 허용 범위가 다름",
     },
 }
@@ -500,6 +504,45 @@ def _plot_scatter(x: list[float], y: list[float], labels: list[str], xlabel: str
     ax.set_ylabel(ylabel)
     ax.set_title(title, fontsize=13, fontweight="bold")
     ax.grid(alpha=0.3)
+    fig.tight_layout()
+    return _fig_to_base64(fig)
+
+
+def _plot_performance_efficiency(
+    labels: Sequence[str],
+    latency: Sequence[float],
+    cost: Sequence[float],
+    scotts_pi: Sequence[float],
+) -> str:
+    """2-panel scatter: latency vs performance (left) and cost vs performance (right)."""
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+
+    colors = ["#4C8BF5", "#F5564C", "#F5A623", "#34A853", "#7C3AED", "#0891B2", "#DB2777", "#D97706"]
+
+    def _draw_panel(ax: plt.Axes, x_vals: Sequence[float], y_vals: Sequence[float], xlabel: str, title: str) -> None:
+        point_colors = [colors[i % len(colors)] for i in range(len(labels))]
+        ax.scatter(x_vals, y_vals, s=90, color=point_colors, zorder=3)
+        for xi, yi, lab in zip(x_vals, y_vals, labels):
+            ax.annotate(lab, (xi, yi), textcoords="offset points", xytext=(6, 4), fontsize=7.5, color="#333")
+        ax.set_xlabel(xlabel, fontsize=10)
+        ax.set_ylabel("Scott's π (성능)", fontsize=10)
+        ax.set_title(title, fontsize=12, fontweight="bold")
+        ax.grid(alpha=0.25)
+        # Shade ideal quadrant (low x, high y)
+        if x_vals and y_vals:
+            x_mid = (min(x_vals) + max(x_vals)) / 2
+            y_mid = (min(y_vals) + max(y_vals)) / 2
+            ax.axvline(x=x_mid, color="#aaa", linestyle="--", lw=0.8, alpha=0.6)
+            ax.axhline(y=y_mid, color="#aaa", linestyle="--", lw=0.8, alpha=0.6)
+            ax.text(
+                min(x_vals), max(y_vals), "★ 이상적",
+                fontsize=8, color="#34A853", va="top", ha="left",
+                bbox=dict(boxstyle="round,pad=0.2", facecolor="#d4edda", alpha=0.7, edgecolor="none"),
+            )
+
+    _draw_panel(ax1, latency, scotts_pi, "평균 지연 시간 (ms)", "빠르고 좋은 모델 (지연↓, 성능↑)")
+    _draw_panel(ax2, cost, scotts_pi, "추정 비용 (USD)", "싸고 좋은 모델 (비용↓, 성능↑)")
+
     fig.tight_layout()
     return _fig_to_base64(fig)
 
@@ -939,7 +982,8 @@ def generate_merged_report(output_dirs: list[Path], report_path: Path) -> Path:
     all_labels = (merged_metrics["judge_model"] + ":" + merged_metrics["prompt_template"]).tolist()
     lat = merged_metrics["avg_latency_ms"].fillna(0).tolist() if has_latency else [0] * len(merged_metrics)
     cost = merged_metrics["total_estimated_cost"].fillna(0).tolist() if has_cost else [0] * len(merged_metrics)
-    plots["cost_latency"] = _plot_scatter(lat, cost, all_labels, "Avg Latency (ms)", "Estimated Cost", "Cost / Latency Trade-off")
+    merged_perf = merged_metrics["scotts_pi"].fillna(0).tolist()
+    plots["cost_latency"] = _plot_performance_efficiency(all_labels, lat, cost, merged_perf)
 
     from judge_eval.metrics import compute_rankings
     global_rankings = compute_rankings(merged_metrics)
@@ -1108,7 +1152,8 @@ def generate_report(output_dir: Path) -> Path:
         has_cost = "total_estimated_cost" in metrics.columns
         lat = metrics["avg_latency_ms"].fillna(0).tolist() if has_latency else [0] * n
         cost = metrics["total_estimated_cost"].fillna(0).tolist() if has_cost else [0] * n
-        plots["cost_latency"] = _plot_scatter(lat, cost, labels, "Avg Latency (ms)", "Estimated Cost", "Cost / Latency Trade-off")
+        perf = metrics["scotts_pi"].fillna(0).tolist()
+        plots["cost_latency"] = _plot_performance_efficiency(labels, lat, cost, perf)
 
     if not prompt_sensitivity.empty:
         pivot = prompt_sensitivity.pivot_table(

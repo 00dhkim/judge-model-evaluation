@@ -431,15 +431,8 @@ def _run_single_attempt(
                 last_record = record
                 if parsed["parse_method"] != "invalid":
                     return record
-                warnings.warn(f"Invalid output for unit {unit_key} on attempt {retry_count + 1}", stacklevel=2)
             except Exception as exc:
                 error_message = f"{type(exc).__name__}: {exc}"
-                warning_message = _short_warning_message(error_message)
-                warnings.warn(
-                    f"Error output for unit {unit_key} model {model_name} on attempt {retry_count + 1}: "
-                    f"{warning_message}",
-                    stacklevel=2,
-                )
                 record = _build_error_attempt_record(
                     config=config,
                     sample=sample,
@@ -458,14 +451,15 @@ def _run_single_attempt(
                 raw_handle.write(json.dumps(record, ensure_ascii=False) + "\n")
                 raw_handle.flush()
                 last_record = record
+    if last_record:
+        final_status = last_record.get("parse_status", "")
+        if final_status in {"invalid", "error"}:
+            warnings.warn(
+                f"Unit {unit_key} ({model_name}) failed all {retry_limit + 1} attempt(s): {final_status}",
+                stacklevel=2,
+            )
     return last_record or {}
 
-
-def _short_warning_message(message: str, max_length: int = 300) -> str:
-    one_line = " ".join(message.split())
-    if len(one_line) <= max_length:
-        return one_line
-    return one_line[: max_length - 3] + "..."
 
 
 def _build_error_attempt_record(
