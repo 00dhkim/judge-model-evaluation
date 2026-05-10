@@ -508,6 +508,50 @@ def _plot_scatter(x: list[float], y: list[float], labels: list[str], xlabel: str
     return _fig_to_base64(fig)
 
 
+def _plot_judge_vs_human(
+    human_scores: list[float],
+    judge_scores: list[float],
+    labels: list[str],
+) -> str:
+    """Judge Score vs Human Score scatter with y=x reference line and lenient/strict region shading."""
+    all_vals = human_scores + judge_scores
+    lo = max(0.0, min(all_vals) - 0.03)
+    hi = min(1.0, max(all_vals) + 0.03)
+
+    fig, ax = plt.subplots(figsize=(7, 6))
+
+    # Region shading
+    ax.fill_between([lo, hi], [lo, hi], [hi, hi], alpha=0.06, color="#F5564C", label=None)  # lenient (above y=x)
+    ax.fill_between([lo, hi], [lo, lo], [lo, hi], alpha=0.06, color="#34A853", label=None)  # strict (below y=x)
+
+    # y = x line
+    ax.plot([lo, hi], [lo, hi], color="#888", linewidth=1.2, linestyle="--", zorder=2, label="y = x (완벽 일치)")
+
+    # Region labels
+    mid = (lo + hi) / 2
+    ax.text(lo + (hi - lo) * 0.05, hi - (hi - lo) * 0.04, "관대 (Lenient)\njudge_score > human_score",
+            fontsize=8, color="#c0392b", va="top")
+    ax.text(hi - (hi - lo) * 0.05, lo + (hi - lo) * 0.04, "엄격 (Strict)\njudge_score < human_score",
+            fontsize=8, color="#27ae60", va="bottom", ha="right")
+
+    # Points
+    colors = [("#F5564C" if js > hs + 0.005 else "#34A853" if js < hs - 0.005 else "#4C8BF5")
+              for hs, js in zip(human_scores, judge_scores)]
+    ax.scatter(human_scores, judge_scores, s=90, color=colors, zorder=4)
+    for xi, yi, lab in zip(human_scores, judge_scores, labels):
+        ax.annotate(lab, (xi, yi), textcoords="offset points", xytext=(6, 4), fontsize=7.5)
+
+    ax.set_xlim(lo, hi)
+    ax.set_ylim(lo, hi)
+    ax.set_xlabel("Human Score (실제 정답 비율)", fontsize=10)
+    ax.set_ylabel("Judge Score (judge가 정답으로 판정한 비율)", fontsize=10)
+    ax.set_title("Judge Score vs Human Score\n(y=x 위: 관대, 아래: 엄격)", fontsize=12, fontweight="bold")
+    ax.legend(fontsize=8, loc="upper left")
+    ax.grid(alpha=0.25)
+    fig.tight_layout()
+    return _fig_to_base64(fig)
+
+
 def _plot_performance_efficiency_html(
     labels: Sequence[str],
     latency: Sequence[float],
@@ -1072,13 +1116,10 @@ def generate_merged_report(
     plots_html["cost_latency"] = _plot_performance_efficiency_html(all_labels, lat, cost, merged_perf, exp_point_colors)
 
     if {"human_score", "judge_score"}.issubset(merged_metrics.columns):
-        plots["judge_vs_human"] = _plot_scatter(
+        plots["judge_vs_human"] = _plot_judge_vs_human(
             merged_metrics["human_score"].fillna(0).tolist(),
             merged_metrics["judge_score"].fillna(0).tolist(),
             all_labels,
-            "Human Score",
-            "Judge Score",
-            "Judge Score vs Human Score",
         )
 
     from judge_eval.metrics import compute_rankings
@@ -1234,13 +1275,10 @@ def generate_report(output_dir: Path) -> Path:
         )
 
         n = len(metrics)
-        plots["judge_vs_human"] = _plot_scatter(
+        plots["judge_vs_human"] = _plot_judge_vs_human(
             metrics["human_score"].tolist(),
             metrics["judge_score"].tolist(),
             labels,
-            "Human Score",
-            "Judge Score",
-            "Judge Score vs Human Score",
         )
         plots["precision_recall_f1"] = _plot_grouped_bar(
             labels,
