@@ -336,16 +336,29 @@ def _plot_bar(
     title: str,
     ylabel: str,
     color: str | Sequence[str] = "#4C8BF5",
+    vline: float | None = None,
 ) -> str:
-    fig, ax = plt.subplots(figsize=(max(16, len(labels) * 2.4), 9))
-    bars = ax.bar(labels, values, color=color, width=0.6)
-    ax.set_title(title, fontsize=34, fontweight="bold", pad=26)
-    ax.set_ylabel(ylabel, fontsize=26)
-    ax.set_ylim(0, 1.0)
-    ax.tick_params(axis="x", rotation=35, labelsize=23)
-    ax.tick_params(axis="y", labelsize=22)
-    for bar, val in zip(bars, values):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.018, f"{val:.3f}", ha="center", fontsize=23)
+    # Reverse so the highest value appears at the top of the horizontal chart.
+    rev_labels = labels[::-1]
+    rev_values = values[::-1]
+    rev_color = list(color)[::-1] if isinstance(color, (list, tuple)) else color
+    n = len(rev_labels)
+    # Auto-trim x-axis: if all values cluster above some floor, skip the empty lower range.
+    x_floor = (min(rev_values) // 0.1) * 0.1 - 0.05 if rev_values else 0.0
+    x_start = max(0.0, x_floor) if x_floor >= 0.1 else 0.0
+    fig, ax = plt.subplots(figsize=(12, max(6, n * 0.55)))
+    bars = ax.barh(rev_labels, rev_values, color=rev_color, height=0.65)
+    ax.set_title(title, fontsize=18, fontweight="bold", pad=14)
+    ax.set_xlabel(ylabel, fontsize=14)
+    ax.set_xlim(x_start, 1.02)
+    ax.tick_params(axis="y", labelsize=12)
+    ax.tick_params(axis="x", labelsize=11)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    if vline is not None:
+        ax.axvline(vline, color="#888", linewidth=1, linestyle="--", alpha=0.5)
+    for bar, val in zip(bars, rev_values):
+        ax.text(val + 0.008, bar.get_y() + bar.get_height() / 2, f"{val:.3f}", va="center", fontsize=11, color="#333333")
     fig.tight_layout()
     return _fig_to_base64(fig)
 
@@ -358,19 +371,24 @@ def _plot_grouped_bar(
 ) -> str:
     n_series = len(series)
     n_groups = len(x_labels)
-    width = 0.7 / n_series
-    fig, ax = plt.subplots(figsize=(max(16, n_groups * 2.5), 9))
+    height = 0.7 / n_series
     default_colors = ["#4C8BF5", "#F5564C", "#F5A623", "#34A853"]
+    # Reverse group order so the first label appears at the top.
+    rev_labels = x_labels[::-1]
+    fig, ax = plt.subplots(figsize=(12, max(6, n_groups * 0.55)))
     for i, (name, vals) in enumerate(series.items()):
-        offsets = [j + (i - n_series / 2 + 0.5) * width for j in range(n_groups)]
-        c = (colors[i] if colors and i < len(colors) else default_colors[i % len(default_colors)])
-        ax.bar(offsets, vals, width=width * 0.9, label=name, color=c)
-    ax.set_xticks(list(range(n_groups)))
-    ax.set_xticklabels(x_labels, rotation=35, ha="right", fontsize=23)
-    ax.set_title(title, fontsize=34, fontweight="bold", pad=26)
-    ax.set_ylim(0, 1.0)
-    ax.tick_params(axis="y", labelsize=22)
-    ax.legend(fontsize=24)
+        rev_vals = vals[::-1]
+        offsets = [j + (i - n_series / 2 + 0.5) * height for j in range(n_groups)]
+        c = colors[i] if colors and i < len(colors) else default_colors[i % len(default_colors)]
+        ax.barh(offsets, rev_vals, height=height * 0.9, label=name, color=c)
+    ax.set_yticks(list(range(n_groups)))
+    ax.set_yticklabels(rev_labels, fontsize=12)
+    ax.set_title(title, fontsize=18, fontweight="bold", pad=14)
+    ax.set_xlim(0, 1.0)
+    ax.tick_params(axis="x", labelsize=11)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.legend(fontsize=13)
     fig.tight_layout()
     return _fig_to_base64(fig)
 
@@ -427,9 +445,9 @@ def _plot_model_rankings_chart(rankings: pd.DataFrame) -> str:
     rank_pivot = rank_pivot.reindex(columns=col_order)
     val_pivot = val_pivot.reindex(columns=col_order)
 
-    # Sort rows: models that are rank-1 most often go first (lower avg rank = better)
-    rank_pivot["_avg"] = rank_pivot.mean(axis=1)
-    rank_pivot = rank_pivot.sort_values("_avg").drop(columns="_avg")
+    # Sort by Scott's π rank (ascending = rank 1 first); then reverse so rank 1 appears at the top of the chart.
+    sort_col = "primary_scotts_pi" if "primary_scotts_pi" in rank_pivot.columns else rank_pivot.columns[0]
+    rank_pivot = rank_pivot.sort_values(sort_col, ascending=False)
     val_pivot = val_pivot.reindex(index=rank_pivot.index)
 
     n_rows, n_cols = rank_pivot.shape
@@ -1314,13 +1332,13 @@ def generate_merged_report(
     labels_best = _model_prompt_labels(best_per_model, style="newline")
     bar_colors = [_model_color(model) for model in best_per_model["judge_model"].tolist()]
 
-    plots["scotts_pi"] = _plot_bar(labels_best, best_per_model["scotts_pi"].tolist(), "Scott's π — 모델별 최고 성능", "Scott's π", bar_colors)
-    plots["percent_agreement"] = _plot_bar(labels_best, best_per_model["percent_agreement"].tolist(), "Percent Agreement — 모델별 최고 성능", "Agreement", bar_colors)
-    plots["f1"] = _plot_bar(labels_best, best_per_model["f1"].tolist(), "F1 — 모델별 최고 성능", "F1", bar_colors)
+    plots["scotts_pi"] = _plot_bar(labels_best, best_per_model["scotts_pi"].tolist(), "Scott's π", "Scott's π", bar_colors, vline=0.8)
+    plots["percent_agreement"] = _plot_bar(labels_best, best_per_model["percent_agreement"].tolist(), "Percent Agreement", "Agreement", bar_colors)
+    plots["f1"] = _plot_bar(labels_best, best_per_model["f1"].tolist(), "F1", "F1", bar_colors)
     plots["fpr_fnr"] = _plot_grouped_bar(
         labels_best,
         {"FPR": best_per_model["fpr"].tolist(), "FNR": best_per_model["fnr"].tolist()},
-        "FPR / FNR — 모델별 최고 성능",
+        "FPR / FNR",
         colors=["#F5564C", "#F5A623"],
     )
 
@@ -1397,7 +1415,7 @@ def generate_merged_report(
             + legend_html
             + _html_table(pd.DataFrame({"실험명": exp_names, "디렉토리": [d.name for d in output_dirs]}))
         )),
-        '<h1 class="section-title">핵심 성능 지표 (모델별 최고 성능 기준)</h1>',
+        '<h1 class="section-title">핵심 성능 지표</h1>',
         chart_section("Scott's π", "scotts_pi", METRIC_DESCRIPTIONS["scotts_pi"]["desc"]),
         chart_section("Percent Agreement", "percent_agreement", METRIC_DESCRIPTIONS["percent_agreement"]["desc"]),
         chart_section("F1", "f1", METRIC_DESCRIPTIONS["precision_recall_f1"]["desc"]),
@@ -1480,7 +1498,7 @@ def generate_report(output_dir: Path) -> Path:
     if not metrics.empty:
         labels = _model_prompt_labels(metrics, style="compact")
 
-        plots["scotts_pi"] = _plot_bar(labels, metrics["scotts_pi"].tolist(), "Scott's π by Judge / Prompt", "Scott's π", "#34A853")
+        plots["scotts_pi"] = _plot_bar(labels, metrics["scotts_pi"].tolist(), "Scott's π by Judge / Prompt", "Scott's π", "#34A853", vline=0.8)
         plots["percent_agreement"] = _plot_bar(labels, metrics["percent_agreement"].tolist(), "Percent Agreement by Judge / Prompt", "Agreement", "#4C8BF5")
         plots["score_gap"] = _plot_bar(
             labels,
