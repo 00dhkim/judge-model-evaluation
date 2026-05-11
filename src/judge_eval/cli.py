@@ -52,6 +52,12 @@ def _load_predictions_frame(output_dir: Path) -> pd.DataFrame:
     )
 
 
+def _exclude_models(frame: pd.DataFrame, model_names: set[str] | None) -> pd.DataFrame:
+    if not model_names or frame.empty or "judge_model" not in frame.columns:
+        return frame
+    return frame[~frame["judge_model"].isin(model_names)].reset_index(drop=True)
+
+
 def _load_run_context(config_path: str) -> tuple[object, str, Path, pd.DataFrame, str, dict]:
     config, _ = load_config(config_path)
     config_hash_value = config_hash(config_path)
@@ -149,6 +155,8 @@ def cmd_metrics(args: argparse.Namespace) -> int:
     except FileNotFoundError as exc:
         print(str(exc), file=sys.stderr)
         return 1
+    exclude = set(args.exclude_models) if args.exclude_models else None
+    parsed = _exclude_models(parsed, exclude)
     write_metrics_bundle(parsed, output_dir, bootstrap_iterations=args.bootstrap_iterations)
     config_payload = yaml.safe_load((output_dir / "config.resolved.yaml").read_text(encoding="utf-8"))
     telemetry = config_payload.get("telemetry", {}) or {}
@@ -223,6 +231,10 @@ def build_parser() -> argparse.ArgumentParser:
     metrics_parser = subparsers.add_parser("metrics")
     metrics_parser.add_argument("output_dir")
     metrics_parser.add_argument("--bootstrap-iterations", type=int, default=200)
+    metrics_parser.add_argument(
+        "--exclude-models", nargs="*", metavar="MODEL",
+        help="Judge model names to exclude from metrics generation",
+    )
     metrics_parser.set_defaults(func=cmd_metrics)
 
     report_parser = subparsers.add_parser("report")

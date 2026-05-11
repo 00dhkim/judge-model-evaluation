@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import sys
 from typing import Iterable
 
 import numpy as np
@@ -101,6 +102,82 @@ def summarize_metrics(frame: pd.DataFrame, group_by: list[str]) -> pd.DataFrame:
         metrics = compute_metric_result(group)
         rows.append({**key_payload, **metrics.__dict__})
     return pd.DataFrame(rows)
+
+
+def evaluation_coverage_summary(frame: pd.DataFrame) -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    required = {"judge_model", "prompt_template", "parsed_label", "human_label"}
+    if frame.empty or not required.issubset(frame.columns):
+        return pd.DataFrame(rows)
+
+    for (judge_model, prompt_template), group in frame.groupby(["judge_model", "prompt_template"], dropna=False):
+        valid = group[group["parsed_label"].notna()]
+        human_total = group["human_label"].dropna().astype(bool)
+        human_valid = valid["human_label"].dropna().astype(bool)
+        rows.append(
+            {
+                "judge_model": judge_model,
+                "prompt_template": prompt_template,
+                "total_rows": int(len(group)),
+                "valid_rows": int(len(valid)),
+                "invalid_rows": int(len(group) - len(valid)),
+                "human_positive_total": int((human_total == True).sum()),
+                "human_negative_total": int((human_total == False).sum()),
+                "human_positive_valid": int((human_valid == True).sum()),
+                "human_negative_valid": int((human_valid == False).sum()),
+                "human_score_total": float(human_total.mean()) if not human_total.empty else np.nan,
+                "human_score_valid": float(human_valid.mean()) if not human_valid.empty else np.nan,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def format_evaluation_coverage_warning(frame: pd.DataFrame) -> str | None:
+    summary = evaluation_coverage_summary(frame)
+    if summary.empty:
+        return None
+
+    mismatch_prompts: list[object] = []
+    comparison_cols = [
+        "total_rows",
+        "valid_rows",
+        "human_positive_valid",
+        "human_negative_valid",
+    ]
+    for prompt_template, group in summary.groupby("prompt_template", dropna=False):
+        if any(group[column].nunique(dropna=False) > 1 for column in comparison_cols):
+            mismatch_prompts.append(prompt_template)
+
+    if not mismatch_prompts:
+        return None
+
+    details = summary[summary["prompt_template"].isin(mismatch_prompts)].sort_values(
+        ["prompt_template", "total_rows", "valid_rows", "judge_model"],
+        ascending=[True, False, False, True],
+    )
+    display_cols = [
+        "judge_model",
+        "prompt_template",
+        "total_rows",
+        "valid_rows",
+        "invalid_rows",
+        "human_score_valid",
+        "human_score_total",
+    ]
+    table_lines = details[display_cols].to_string(index=False).splitlines()
+    highlighted_lines = [table_lines[0]]
+    for line, invalid_rows in zip(table_lines[1:], details["invalid_rows"].tolist(), strict=True):
+        if invalid_rows > 0:
+            highlighted_lines.append(f"\033[33m{line}\033[0m")
+        else:
+            highlighted_lines.append(line)
+    table = "\n".join(highlighted_lines)
+    prompt_list = ", ".join(str(prompt) for prompt in mismatch_prompts)
+    return (
+        f"Warning: evaluation coverage mismatch for prompt_template(s): {prompt_list}; metrics will still be written.\n"
+        "Per-model coverage details:\n"
+        f"{table}"
+    )
 
 
 def compute_rankings(overall: pd.DataFrame) -> pd.DataFrame:
@@ -337,6 +414,9 @@ def write_metrics_bundle(parsed: pd.DataFrame, output_dir: Path, bootstrap_itera
     # when available, otherwise fall back to base (which only uses the first template)
     prompt_sens_rows = parsed[parsed["variant_type"] == "prompt_sensitivity"].copy()
     metric_source = prompt_sens_rows if not prompt_sens_rows.empty else base
+    coverage_warning = format_evaluation_coverage_warning(metric_source)
+    if coverage_warning:
+        print(coverage_warning, file=sys.stderr)
     metric_dimensions = ["judge_model", "prompt_template"]
     overall = summarize_metrics(metric_source, metric_dimensions)
     by_dataset = summarize_metrics(metric_source, metric_dimensions + ["dataset"])
