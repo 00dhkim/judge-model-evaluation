@@ -50,7 +50,7 @@ def test_report_contains_required_sections(tmp_path: Path):
         "가장 엄격한 judge",
         "프롬프트 민감도 최고",
         "더미 강건성 최저",
-        "Reference Order 적용 범위",
+        "순서 민감도 시각화",
         "운영 투입 판단",
     ]:
         assert needle in report

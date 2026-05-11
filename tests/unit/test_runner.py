@@ -214,7 +214,7 @@ def test_run_predictions_records_parse_exception_and_continues(tmp_path: Path, m
 
     monkeypatch.setattr("judge_eval.runner.parse_model_output", flaky_parse)
 
-    with pytest.warns(UserWarning, match="Error output for unit .* model heuristic_dummy .* RuntimeError: parser exploded"):
+    with pytest.warns(UserWarning, match=r"Unit .* \(heuristic_dummy\) failed all 1 attempt\(s\): error"):
         parsed = run_predictions(
             config=config,
             normalized_samples=samples,
