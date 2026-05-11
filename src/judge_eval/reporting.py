@@ -330,15 +330,22 @@ def _experiment_overview_items(
 # ---------------------------------------------------------------------------
 
 
-def _plot_bar(labels: list[str], values: list[float], title: str, ylabel: str, color: str = "#4C8BF5") -> str:
-    fig, ax = plt.subplots(figsize=(max(8, len(labels) * 1.2), 5))
+def _plot_bar(
+    labels: list[str],
+    values: list[float],
+    title: str,
+    ylabel: str,
+    color: str | Sequence[str] = "#4C8BF5",
+) -> str:
+    fig, ax = plt.subplots(figsize=(max(16, len(labels) * 2.4), 9))
     bars = ax.bar(labels, values, color=color, width=0.6)
-    ax.set_title(title, fontsize=13, fontweight="bold")
-    ax.set_ylabel(ylabel)
+    ax.set_title(title, fontsize=34, fontweight="bold", pad=26)
+    ax.set_ylabel(ylabel, fontsize=26)
     ax.set_ylim(0, 1.0)
-    ax.tick_params(axis="x", rotation=35)
+    ax.tick_params(axis="x", rotation=35, labelsize=23)
+    ax.tick_params(axis="y", labelsize=22)
     for bar, val in zip(bars, values):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01, f"{val:.3f}", ha="center", fontsize=8)
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.018, f"{val:.3f}", ha="center", fontsize=23)
     fig.tight_layout()
     return _fig_to_base64(fig)
 
@@ -352,17 +359,18 @@ def _plot_grouped_bar(
     n_series = len(series)
     n_groups = len(x_labels)
     width = 0.7 / n_series
-    fig, ax = plt.subplots(figsize=(max(8, n_groups * 1.4), 5))
+    fig, ax = plt.subplots(figsize=(max(16, n_groups * 2.5), 9))
     default_colors = ["#4C8BF5", "#F5564C", "#F5A623", "#34A853"]
     for i, (name, vals) in enumerate(series.items()):
         offsets = [j + (i - n_series / 2 + 0.5) * width for j in range(n_groups)]
         c = (colors[i] if colors and i < len(colors) else default_colors[i % len(default_colors)])
         ax.bar(offsets, vals, width=width * 0.9, label=name, color=c)
     ax.set_xticks(list(range(n_groups)))
-    ax.set_xticklabels(x_labels, rotation=35, ha="right")
-    ax.set_title(title, fontsize=13, fontweight="bold")
+    ax.set_xticklabels(x_labels, rotation=35, ha="right", fontsize=23)
+    ax.set_title(title, fontsize=34, fontweight="bold", pad=26)
     ax.set_ylim(0, 1.0)
-    ax.legend()
+    ax.tick_params(axis="y", labelsize=22)
+    ax.legend(fontsize=24)
     fig.tight_layout()
     return _fig_to_base64(fig)
 
@@ -408,7 +416,7 @@ def _plot_model_rankings_chart(rankings: pd.DataFrame) -> str:
     LOWER_BETTER = {"absolute_score_gap", "false_positive_rate", "false_negative_rate"}
 
     rankings = rankings.copy()
-    rankings["model_key"] = rankings["judge_model"] + "\n(" + rankings["prompt_template"] + ")"
+    rankings["model_key"] = _model_prompt_labels(rankings, style="newline")
 
     # Build rank pivot and value pivot
     rank_pivot = rankings.pivot_table(index="model_key", columns="ranking_name", values="rank", aggfunc="min")
@@ -508,48 +516,174 @@ def _plot_scatter(x: list[float], y: list[float], labels: list[str], xlabel: str
     return _fig_to_base64(fig)
 
 
-def _plot_judge_vs_human(
-    human_scores: list[float],
-    judge_scores: list[float],
-    labels: list[str],
+def _plot_score_delta_html(
+    labels: Sequence[str],
+    deltas: Sequence[float],
+    point_colors: Sequence[str] | None = None,
 ) -> str:
-    """Judge Score vs Human Score scatter with y=x reference line and lenient/strict region shading."""
-    all_vals = human_scores + judge_scores
-    lo = max(0.0, min(all_vals) - 0.03)
-    hi = min(1.0, max(all_vals) + 0.03)
+    """Interactive Plotly.js bar chart: Score Delta (judge − human) per model."""
+    import json
+    import uuid
 
-    fig, ax = plt.subplots(figsize=(7, 6))
+    uid = uuid.uuid4().hex[:8]
+    label_list = list(labels)
+    delta_list = [float(v) for v in deltas]
 
-    # Region shading
-    ax.fill_between([lo, hi], [lo, hi], [hi, hi], alpha=0.06, color="#F5564C", label=None)  # lenient (above y=x)
-    ax.fill_between([lo, hi], [lo, lo], [lo, hi], alpha=0.06, color="#34A853", label=None)  # strict (below y=x)
+    sorted_pairs = sorted(zip(delta_list, label_list), key=lambda x: x[0])
+    sorted_deltas = [p[0] for p in sorted_pairs]
+    sorted_labels = [p[1] for p in sorted_pairs]
 
-    # y = x line
-    ax.plot([lo, hi], [lo, hi], color="#888", linewidth=1.2, linestyle="--", zorder=2, label="y = x (완벽 일치)")
+    bar_colors = [
+        "#F5564C" if d > 0.005 else "#34A853" if d < -0.005 else "#4C8BF5"
+        for d in sorted_deltas
+    ]
+    bias_labels = [
+        "관대 (lenient)" if d > 0.005 else "엄격 (strict)" if d < -0.005 else "일치 (aligned)"
+        for d in sorted_deltas
+    ]
 
-    # Region labels
-    mid = (lo + hi) / 2
-    ax.text(lo + (hi - lo) * 0.05, hi - (hi - lo) * 0.04, "관대 (Lenient)\njudge_score > human_score",
-            fontsize=8, color="#c0392b", va="top")
-    ax.text(hi - (hi - lo) * 0.05, lo + (hi - lo) * 0.04, "엄격 (Strict)\njudge_score < human_score",
-            fontsize=8, color="#27ae60", va="bottom", ha="right")
+    trace = {
+        "type": "bar",
+        "x": sorted_labels,
+        "y": sorted_deltas,
+        "marker": {"color": bar_colors},
+        "customdata": bias_labels,
+        "hovertemplate": "<b>%{x}</b><br>Score Delta: %{y:+.4f}<br>%{customdata}<extra></extra>",
+    }
+    layout = {
+        "title": {"text": "Score Delta (Judge − Human)<br><sup>양수=관대(lenient), 음수=엄격(strict)</sup>", "font": {"size": 15}},
+        "xaxis": {"tickangle": -35, "tickfont": {"size": 11}},
+        "yaxis": {"title": "Score Delta", "zeroline": True, "zerolinecolor": "#333", "zerolinewidth": 2},
+        "shapes": [{"type": "line", "x0": -0.5, "x1": len(sorted_labels) - 0.5, "y0": 0, "y1": 0,
+                    "line": {"color": "#333", "width": 2}}],
+        "height": 480,
+        "margin": {"t": 70, "b": 130, "l": 70, "r": 30},
+        "paper_bgcolor": "white",
+        "plot_bgcolor": "#fafafa",
+    }
+    config = {"responsive": True, "displayModeBar": True, "modeBarButtonsToRemove": ["lasso2d", "select2d"]}
 
-    # Points
-    colors = [("#F5564C" if js > hs + 0.005 else "#34A853" if js < hs - 0.005 else "#4C8BF5")
-              for hs, js in zip(human_scores, judge_scores)]
-    ax.scatter(human_scores, judge_scores, s=90, color=colors, zorder=4)
-    for xi, yi, lab in zip(human_scores, judge_scores, labels):
-        ax.annotate(lab, (xi, yi), textcoords="offset points", xytext=(6, 4), fontsize=7.5)
+    data_json = json.dumps([trace])
+    layout_json = json.dumps(layout)
+    config_json = json.dumps(config)
 
-    ax.set_xlim(lo, hi)
-    ax.set_ylim(lo, hi)
-    ax.set_xlabel("Human Score (실제 정답 비율)", fontsize=10)
-    ax.set_ylabel("Judge Score (judge가 정답으로 판정한 비율)", fontsize=10)
-    ax.set_title("Judge Score vs Human Score\n(y=x 위: 관대, 아래: 엄격)", fontsize=12, fontweight="bold")
-    ax.legend(fontsize=8, loc="upper left")
-    ax.grid(alpha=0.25)
-    fig.tight_layout()
-    return _fig_to_base64(fig)
+    return f"""<div id="plotly-{uid}" style="width:100%;height:490px;"></div>
+<script>
+(function(){{
+  function render(){{Plotly.newPlot('plotly-{uid}',{data_json},{layout_json},{config_json});}}
+  if(typeof Plotly==='undefined'){{
+    var s=document.createElement('script');
+    s.src='https://cdn.plot.ly/plotly-latest.min.js';
+    s.onload=render;document.head.appendChild(s);
+  }}else{{render();}}
+}})();
+</script>"""
+
+
+def _plot_fpr_fnr_quadrant_html(
+    labels: Sequence[str],
+    fpr_vals: Sequence[float],
+    fnr_vals: Sequence[float],
+    point_colors: Sequence[str] | None = None,
+) -> str:
+    """Interactive Plotly.js scatter: FPR vs FNR with quadrant shading.
+
+    Quadrants (threshold=0.10):
+      좌하 = 이상적, 우하 = Lenient (FPR↑), 좌상 = Strict (FNR↑), 우상 = 불안정
+    """
+    import json
+    import uuid
+
+    uid = uuid.uuid4().hex[:8]
+    label_list = list(labels)
+    fpr_list = [float(v) for v in fpr_vals]
+    fnr_list = [float(v) for v in fnr_vals]
+    colors = list(point_colors) if point_colors else [_EXP_COLORS[i % len(_EXP_COLORS)] for i in range(len(label_list))]
+
+    threshold = 0.10
+    quadrant_labels = []
+    for fpr, fnr in zip(fpr_list, fnr_list):
+        if fpr <= threshold and fnr <= threshold:
+            quadrant_labels.append("이상적 (Ideal)")
+        elif fpr > threshold and fnr <= threshold:
+            quadrant_labels.append("관대 (Lenient) — 오답 과대평가")
+        elif fpr <= threshold and fnr > threshold:
+            quadrant_labels.append("엄격 (Strict) — 정답 과소평가")
+        else:
+            quadrant_labels.append("불안정 (Unstable) — 양방향 오류")
+
+    hi = max(max(fpr_list, default=0.0), max(fnr_list, default=0.0), threshold * 2) + 0.05
+
+    trace = {
+        "type": "scatter",
+        "mode": "markers+text",
+        "x": fpr_list,
+        "y": fnr_list,
+        "text": label_list,
+        "customdata": quadrant_labels,
+        "textposition": "top right",
+        "textfont": {"size": 9},
+        "marker": {"size": 12, "color": colors, "opacity": 0.88, "line": {"color": "white", "width": 1}},
+        "showlegend": False,
+        "hovertemplate": (
+            "<b>%{text}</b><br>"
+            "FPR: %{x:.4f}<br>"
+            "FNR: %{y:.4f}<br>"
+            "%{customdata}<extra></extra>"
+        ),
+    }
+
+    layout = {
+        "title": {"text": "FPR vs FNR — 오류 메커니즘 분석<br><sup>좌하=이상적 / 우하=관대 / 좌상=엄격 / 우상=불안정</sup>", "font": {"size": 15}},
+        "xaxis": {"title": "FPR (오답→정답 오인율, 낮을수록 좋음)", "range": [0, hi], "zeroline": False},
+        "yaxis": {"title": "FNR (정답→오답 오인율, 낮을수록 좋음)", "range": [0, hi], "zeroline": False},
+        "shapes": [
+            {"type": "rect", "x0": 0, "y0": 0, "x1": threshold, "y1": threshold,
+             "fillcolor": "rgba(52,168,83,0.10)", "line": {"width": 0}, "layer": "below"},
+            {"type": "rect", "x0": threshold, "y0": 0, "x1": hi, "y1": threshold,
+             "fillcolor": "rgba(245,86,76,0.08)", "line": {"width": 0}, "layer": "below"},
+            {"type": "rect", "x0": 0, "y0": threshold, "x1": threshold, "y1": hi,
+             "fillcolor": "rgba(52,100,168,0.08)", "line": {"width": 0}, "layer": "below"},
+            {"type": "rect", "x0": threshold, "y0": threshold, "x1": hi, "y1": hi,
+             "fillcolor": "rgba(150,50,150,0.07)", "line": {"width": 0}, "layer": "below"},
+            {"type": "line", "x0": threshold, "y0": 0, "x1": threshold, "y1": hi,
+             "line": {"color": "#aaa", "width": 1.5, "dash": "dot"}},
+            {"type": "line", "x0": 0, "y0": threshold, "x1": hi, "y1": threshold,
+             "line": {"color": "#aaa", "width": 1.5, "dash": "dot"}},
+        ],
+        "annotations": [
+            {"text": "이상적", "x": threshold * 0.5, "y": threshold * 0.5, "showarrow": False,
+             "font": {"size": 11, "color": "#27ae60"}, "xanchor": "center"},
+            {"text": "관대 (Lenient)", "x": (threshold + hi) / 2, "y": threshold * 0.5, "showarrow": False,
+             "font": {"size": 11, "color": "#c0392b"}, "xanchor": "center"},
+            {"text": "엄격 (Strict)", "x": threshold * 0.5, "y": (threshold + hi) / 2, "showarrow": False,
+             "font": {"size": 11, "color": "#2980b9"}, "xanchor": "center"},
+            {"text": "불안정", "x": (threshold + hi) / 2, "y": (threshold + hi) / 2, "showarrow": False,
+             "font": {"size": 11, "color": "#8e44ad"}, "xanchor": "center"},
+        ],
+        "height": 520,
+        "margin": {"t": 70, "b": 70, "l": 80, "r": 30},
+        "hovermode": "closest",
+        "paper_bgcolor": "white",
+        "plot_bgcolor": "#fafafa",
+    }
+    config = {"responsive": True, "displayModeBar": True, "modeBarButtonsToRemove": ["lasso2d", "select2d"]}
+
+    data_json = json.dumps([trace])
+    layout_json = json.dumps(layout)
+    config_json = json.dumps(config)
+
+    return f"""<div id="plotly-{uid}" style="width:100%;height:530px;"></div>
+<script>
+(function(){{
+  function render(){{Plotly.newPlot('plotly-{uid}',{data_json},{layout_json},{config_json});}}
+  if(typeof Plotly==='undefined'){{
+    var s=document.createElement('script');
+    s.src='https://cdn.plot.ly/plotly-latest.min.js';
+    s.onload=render;document.head.appendChild(s);
+  }}else{{render();}}
+}})();
+</script>"""
 
 
 def _plot_performance_efficiency_html(
@@ -1019,9 +1153,95 @@ h1.section-title {
 
 _EXP_COLORS = ["#4C8BF5", "#F5564C", "#F5A623", "#34A853", "#7C3AED", "#0891B2", "#DB2777", "#D97706", "#059669", "#DC2626"]
 
+_MODEL_LAB_FALLBACK_COLOR = "#807D77"
 
-def _exp_color_map(exp_names: list[str]) -> dict[str, str]:
-    return {name: _EXP_COLORS[i % len(_EXP_COLORS)] for i, name in enumerate(sorted(set(exp_names)))}
+# Provider colors follow the public Artificial Analysis benchmark palette.
+_MODEL_LAB_COLORS = {
+    "OpenAI": "#1f1f1f",
+    "Anthropic": "#cc785c",
+    "Google": "#34A853",
+    "Meta": "#0089f4",
+    "Mistral": "#fd6f00",
+    "DeepSeek": "#2243e6",
+    "xAI": "#736cd3",
+    "Alibaba": "#ff7018",
+    "Kimi": "#047AFE",
+    "NVIDIA": "#86b737",
+    "Upstage": "#7c59f5",
+    "Z AI": "#1c7ff8",
+    "LG AI Research": "#1521a9",
+    "MiniMax": "#EB3568",
+    "Amazon": "#FF9900",
+    "Xiaomi": "#ff6900",
+}
+
+_MODEL_LAB_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
+    ("OpenAI", ("gpt", "openai", "o1", "o3", "o4")),
+    ("Anthropic", ("claude", "anthropic")),
+    ("Google", ("gemini", "gemma", "google")),
+    ("Meta", ("llama", "meta")),
+    ("Mistral", ("mistral", "mixtral")),
+    ("DeepSeek", ("deepseek",)),
+    ("xAI", ("grok", "xai", "x_ai")),
+    ("Alibaba", ("qwen", "alibaba")),
+    ("Kimi", ("kimi", "moonshot")),
+    ("NVIDIA", ("nemotron", "nvidia")),
+    ("Upstage", ("solar", "upstage")),
+    ("Z AI", ("glm", "z_ai", "zai")),
+    ("LG AI Research", ("exaone", "lg_ai", "lg-")),
+    ("MiniMax", ("minimax", "mini_max")),
+    ("Amazon", ("nova", "amazon")),
+    ("Xiaomi", ("mimo", "xiaomi")),
+]
+
+
+def _model_lab(model_name: str) -> str:
+    normalized = str(model_name).lower().replace("-", "_").replace("/", "_")
+    return next(
+        (lab for lab, keywords in _MODEL_LAB_KEYWORDS if any(keyword in normalized for keyword in keywords)),
+        "Other",
+    )
+
+
+def _model_color(model_name: str) -> str:
+    return _MODEL_LAB_COLORS.get(_model_lab(model_name), _MODEL_LAB_FALLBACK_COLOR)
+
+
+def _model_lab_color_legend(model_names: Sequence[str]) -> str:
+    labs = [_model_lab(model) for model in model_names]
+    ordered_labs = [lab for lab in _MODEL_LAB_COLORS if lab in labs]
+    if "Other" in labs:
+        ordered_labs.append("Other")
+    items = []
+    for lab in ordered_labs:
+        color = _MODEL_LAB_COLORS.get(lab, _MODEL_LAB_FALLBACK_COLOR)
+        items.append(
+            f'<span style="display:inline-flex;align-items:center;gap:0.4rem;margin-right:1rem;">'
+            f'<span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:{color};"></span>'
+            f'{lab}</span>'
+        )
+    return f'<div style="margin-bottom:1rem;font-size:0.88rem;">{"".join(items)}</div>'
+
+
+def _hide_prompt_template_labels(metrics: pd.DataFrame) -> bool:
+    if "prompt_template" not in metrics.columns or metrics.empty:
+        return False
+    prompts = metrics["prompt_template"].dropna().astype(str).unique().tolist()
+    return prompts == ["minimal"]
+
+
+def _model_prompt_labels(metrics: pd.DataFrame, *, style: str) -> list[str]:
+    hide_prompt = _hide_prompt_template_labels(metrics)
+    labels: list[str] = []
+    for row in metrics[["judge_model", "prompt_template"]].fillna("").astype(str).itertuples(index=False):
+        model, prompt = row
+        if hide_prompt or not prompt:
+            labels.append(model)
+        elif style == "newline":
+            labels.append(f"{model}\n({prompt})")
+        else:
+            labels.append(f"{model}:{prompt}")
+    return labels
 
 
 def generate_merged_report(
@@ -1082,7 +1302,6 @@ def generate_merged_report(
     merged_dr = pd.concat(all_dummy_robustness, ignore_index=True) if all_dummy_robustness else pd.DataFrame()
     merged_rankings = pd.concat(all_rankings, ignore_index=True) if all_rankings else pd.DataFrame()
 
-    color_map = _exp_color_map(exp_names)
     best_per_model = (
         merged_metrics.sort_values("scotts_pi", ascending=False)
         .drop_duplicates("judge_model")
@@ -1092,12 +1311,12 @@ def generate_merged_report(
 
     plots: dict[str, str] = {}
 
-    labels_best = (best_per_model["judge_model"] + "\n(" + best_per_model["prompt_template"] + ")").tolist()
-    bar_colors = [color_map.get(exp, "#4C8BF5") for exp in best_per_model["experiment"].tolist()]
+    labels_best = _model_prompt_labels(best_per_model, style="newline")
+    bar_colors = [_model_color(model) for model in best_per_model["judge_model"].tolist()]
 
-    plots["scotts_pi"] = _plot_bar(labels_best, best_per_model["scotts_pi"].tolist(), "Scott's π — 모델별 최고 성능", "Scott's π", bar_colors)  # type: ignore[arg-type]
-    plots["percent_agreement"] = _plot_bar(labels_best, best_per_model["percent_agreement"].tolist(), "Percent Agreement — 모델별 최고 성능", "Agreement", bar_colors)  # type: ignore[arg-type]
-    plots["f1"] = _plot_bar(labels_best, best_per_model["f1"].tolist(), "F1 — 모델별 최고 성능", "F1", bar_colors)  # type: ignore[arg-type]
+    plots["scotts_pi"] = _plot_bar(labels_best, best_per_model["scotts_pi"].tolist(), "Scott's π — 모델별 최고 성능", "Scott's π", bar_colors)
+    plots["percent_agreement"] = _plot_bar(labels_best, best_per_model["percent_agreement"].tolist(), "Percent Agreement — 모델별 최고 성능", "Agreement", bar_colors)
+    plots["f1"] = _plot_bar(labels_best, best_per_model["f1"].tolist(), "F1 — 모델별 최고 성능", "F1", bar_colors)
     plots["fpr_fnr"] = _plot_grouped_bar(
         labels_best,
         {"FPR": best_per_model["fpr"].tolist(), "FNR": best_per_model["fnr"].tolist()},
@@ -1107,19 +1326,26 @@ def generate_merged_report(
 
     has_latency = "avg_latency_ms" in merged_metrics.columns
     has_cost = "total_estimated_cost" in merged_metrics.columns
-    all_labels = (merged_metrics["judge_model"] + ":" + merged_metrics["prompt_template"]).tolist()
+    all_labels = _model_prompt_labels(merged_metrics, style="compact")
     lat = merged_metrics["avg_latency_ms"].fillna(0).tolist() if has_latency else [0] * len(merged_metrics)
     cost = merged_metrics["total_estimated_cost"].fillna(0).tolist() if has_cost else [0] * len(merged_metrics)
     merged_perf = merged_metrics["scotts_pi"].fillna(0).tolist()
-    exp_point_colors = [color_map.get(e, "#4C8BF5") for e in merged_metrics["experiment"].tolist()]
+    model_point_colors = [_model_color(model) for model in merged_metrics["judge_model"].tolist()]
     plots_html: dict[str, str] = {}
-    plots_html["cost_latency"] = _plot_performance_efficiency_html(all_labels, lat, cost, merged_perf, exp_point_colors)
+    plots_html["cost_latency"] = _plot_performance_efficiency_html(all_labels, lat, cost, merged_perf, model_point_colors)
 
-    if {"human_score", "judge_score"}.issubset(merged_metrics.columns):
-        plots["judge_vs_human"] = _plot_judge_vs_human(
-            merged_metrics["human_score"].fillna(0).tolist(),
-            merged_metrics["judge_score"].fillna(0).tolist(),
+    if "score_delta" in merged_metrics.columns:
+        plots_html["score_delta"] = _plot_score_delta_html(
             all_labels,
+            merged_metrics["score_delta"].fillna(0).tolist(),
+            model_point_colors,
+        )
+    if {"fpr", "fnr"}.issubset(merged_metrics.columns):
+        plots_html["fpr_fnr_quadrant"] = _plot_fpr_fnr_quadrant_html(
+            all_labels,
+            merged_metrics["fpr"].fillna(0).tolist(),
+            merged_metrics["fnr"].fillna(0).tolist(),
+            model_point_colors,
         )
 
     from judge_eval.metrics import compute_rankings
@@ -1141,14 +1367,7 @@ def generate_merged_report(
         dr_labels = (merged_dr["judge_model"] + ":" + merged_dr["dummy_class"]).tolist()
         plots["dummy_robustness"] = _plot_bar(dr_labels, merged_dr["robustness_accuracy"].tolist(), "Dummy Answer Robustness", "Accuracy", "#7C3AED")
 
-    # Legend for experiment colors
-    legend_items = "".join(
-        f'<span style="display:inline-flex;align-items:center;gap:0.4rem;margin-right:1rem;">'
-        f'<span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:{color_map[n]};"></span>'
-        f'{n}</span>'
-        for n in sorted(color_map)
-    )
-    legend_html = f'<div style="margin-bottom:1rem;font-size:0.88rem;">{legend_items}</div>'
+    legend_html = _model_lab_color_legend(merged_metrics["judge_model"].astype(str).tolist())
 
     def section(title: str, content: str) -> str:
         return f'<section class="section-block"><h2>{title}</h2>{content}</section>'
@@ -1204,14 +1423,11 @@ def generate_merged_report(
             chart_section("Dummy Answer Robustness", "dummy_robustness", METRIC_DESCRIPTIONS["dummy_robustness"]["desc"])
             + section("더미 응답 상세", _html_table(merged_dr))
         ) if not merged_dr.empty else section("더미 응답 강건성", "<p class='no-data'>해당 데이터 없음</p>"),
-        '<h1 class="section-title">Judge vs Human Score</h1>',
-        section(
-            "Judge Score vs Human Score",
-            (
-                f'<div class="chart-wrap"><img src="data:image/png;base64,{plots["judge_vs_human"]}" /></div>'
-                if "judge_vs_human" in plots else "<p class='no-data'>데이터 없음</p>"
-            ),
-        ),
+        '<h1 class="section-title">Judge Bias 분석</h1>',
+        chart_section("Score Delta (Judge − Human)", "score_delta",
+                      "양수=관대(judge가 더 높게 채점), 음수=엄격(judge가 더 낮게 채점). 모델별 편향 방향과 크기를 직접 비교."),
+        chart_section("FPR vs FNR — 오류 메커니즘", "fpr_fnr_quadrant",
+                      "FPR(오답→정답 오인)과 FNR(정답→오답 오인)의 조합으로 judge 오류 유형을 4분면으로 분류. 좌하=이상적, 우하=관대, 좌상=엄격, 우상=불안정."),
         '<h1 class="section-title">전체 메트릭 테이블</h1>',
         section("All Metrics (Scott's π 내림차순)", _html_table(table_df)),
     ]
@@ -1262,7 +1478,7 @@ def generate_report(output_dir: Path) -> Path:
     plots_html: dict[str, str] = {}
 
     if not metrics.empty:
-        labels = (metrics["judge_model"] + ":" + metrics["prompt_template"]).tolist()
+        labels = _model_prompt_labels(metrics, style="compact")
 
         plots["scotts_pi"] = _plot_bar(labels, metrics["scotts_pi"].tolist(), "Scott's π by Judge / Prompt", "Scott's π", "#34A853")
         plots["percent_agreement"] = _plot_bar(labels, metrics["percent_agreement"].tolist(), "Percent Agreement by Judge / Prompt", "Agreement", "#4C8BF5")
@@ -1275,11 +1491,6 @@ def generate_report(output_dir: Path) -> Path:
         )
 
         n = len(metrics)
-        plots["judge_vs_human"] = _plot_judge_vs_human(
-            metrics["human_score"].tolist(),
-            metrics["judge_score"].tolist(),
-            labels,
-        )
         plots["precision_recall_f1"] = _plot_grouped_bar(
             labels,
             {"Precision": metrics["precision"].tolist(), "Recall": metrics["recall"].tolist(), "F1": metrics["f1"].tolist()},
@@ -1291,6 +1502,13 @@ def generate_report(output_dir: Path) -> Path:
             "False Positive / False Negative Rates",
             colors=["#F5564C", "#F5A623"],
         )
+
+        if {"fpr", "fnr"}.issubset(metrics.columns):
+            plots_html["fpr_fnr_quadrant"] = _plot_fpr_fnr_quadrant_html(
+                labels,
+                metrics["fpr"].fillna(0).tolist(),
+                metrics["fnr"].fillna(0).tolist(),
+            )
 
         has_latency = "avg_latency_ms" in metrics.columns
         has_cost = "total_estimated_cost" in metrics.columns
@@ -1450,12 +1668,13 @@ def generate_report(output_dir: Path) -> Path:
             "더미 응답 상세",
             _html_table(dummy_robustness) if not dummy_robustness.empty else pd.DataFrame(),
         ) if not dummy_robustness.empty else "",
-        '<h1 class="section-title">Judge vs Human Score</h1>',
+        '<h1 class="section-title">Judge Bias 분석</h1>',
+        metric_section("score_gap", "score_gap"),
         section(
-            "Judge Score vs Human Score",
+            "FPR vs FNR — 오류 메커니즘",
             (
-                f'<div class="chart-wrap"><img src="data:image/png;base64,{plots["judge_vs_human"]}" /></div>'
-                if "judge_vs_human" in plots
+                f'<div class="chart-wrap">{plots_html["fpr_fnr_quadrant"]}</div>'
+                if "fpr_fnr_quadrant" in plots_html
                 else "<p class='no-data'>데이터 없음</p>"
             ),
         ),
