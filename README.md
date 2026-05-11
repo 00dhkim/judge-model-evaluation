@@ -1,106 +1,40 @@
 # judge-model-evaluation
 
-EVOUNA-based LLM-as-a-Judge meta-evaluation toolkit.
+**LLM-as-a-Judge 파이프라인에서, judge 모델이 실제로 믿을 만한지 측정합니다.**
 
-## Quickstart
+AI가 생성한 답변을 사람 대신 LLM이 채점하는 방식은 이제 흔합니다. 그런데 그 채점자(judge)가 편향되어 있거나 프롬프트 표현 하나에 흔들린다면, 모든 평가 결과가 잘못된 신호가 됩니다.
+
+이 도구는 **judge 모델 자체를 평가**합니다. 인간이 직접 라벨링한 정답 데이터를 기준으로, 각 judge가 얼마나 정확하고 안정적인지를 측정합니다.
+
+## Core Features
+
+- **어떤 judge를 파이프라인에 올려야 하는지** — 모델별 신뢰도 순위
+- **왜 특정 judge가 위험한지** — 관대한 편향(FPR), 엄격한 편향(FNR), 프롬프트 민감도
+- **비용 대비 신뢰도** — 소형 모델이 대형 모델을 대체할 수 있는지
+
+## Evaluation Result
+
+![Judge Model Reliability](docs/assets/scotts_pi.png)
+
+Scott's Pi: judge 모델의 판단이 인간 라벨과 얼마나 일치하는지를 측정하는 지표 (1.0 = 완전 일치, 0.0 = 랜덤 수준)
+
+[평가 결과 전체 리포트](https://htmlpreview.github.io/?https://github.com/00dhkim/judge-model-evaluation/blob/main/outputs/merged_report.html)
+
+## 빠른 시작
 
 ```bash
-uv venv
-uv sync
+uv venv && uv sync
 
-# YAML 설정 파일의 필드와 값을 파싱해 유효성을 검사한다. 오류가 있으면 stderr에 출력하고 종료한다.
-uv run judge-eval validate-config configs/examples/frontier_latest_202605.yaml
-
-# EVOUNA 데이터셋을 로드하고 필터 정책을 적용해 정규화한 뒤, normalized_samples.parquet으로 저장한다.
 uv run judge-eval prepare-data configs/examples/frontier_latest_202605.yaml
-
-# 정규화된 샘플에 대해 각 judge 모델로 LLM 호출을 수행하고, 응답을 파싱해 parsed_predictions.parquet으로 저장한다.
-# base 평가 외에 prompt sensitivity·reference order·dummy answer 등 variant 평가도 함께 실행한다.
-# prepare-data를 먼저 실행했다면, run은 기존 output 디렉터리를 재사용한다. 날짜가 바뀌어도 같은 config_hash면 이어서 쓴다.
-uv run judge-eval run configs/examples/frontier_latest_202605.yaml
-
-# 이미 기록된 raw_predictions.jsonl을 기준으로 parse_status가 error/invalid인 항목만 다시 실행한다.
-# 기존 raw 레코드는 지우지 않고 append-only로 남기며, parsed_predictions.parquet은 전체 raw 기준 최종 상태로 다시 생성한다.
-uv run judge-eval retry-failures configs/examples/frontier_latest_202605.yaml
-
-# parsed_predictions.parquet을 읽어 Scott's Pi, F1, precision/recall, FPR/FNR, leniency bias 등
-# 다양한 지표를 계산하고, 모델·데이터셋·답변 길이 등 여러 축으로 분류한 CSV 파일들을 저장한다.
-uv run judge-eval metrics outputs/20260509_frontier_latest_202605 --exclude-models kimi_k2_6 mimo_v2_5_pro k_exaone_236b_a23b
-
-# 계산된 지표 CSV들을 읽어 모델 순위·약점·운영 적합성 요약을 담은 마크다운 리포트와
-# Scott's Pi, precision/recall, prompt sensitivity 히트맵 등 시각화 차트를 생성한다.
-uv run judge-eval report outputs/20260509_frontier_latest_202605
-
-uv run pytest -q
-
-# 여러 실험 결과를 하나의 리포트로 병합한다.
-# 각 output 디렉터리의 metrics_overall.csv를 합쳐 전체 모델 기준으로 재랭킹하고,
-# prompt_sensitivity·dummy_answer_robustness는 해당 데이터가 있는 모델끼리만 표시한다.
-# --exclude-models: 특정 judge 모델을 리포트에서 제외한다 (parse 실패가 많거나 비교 대상에서 뺄 때).
-uv run judge-eval merge \
-  outputs/20260422_gemma_hosted_4way_free \
-  outputs/20260423_cerebras_hosted_2way_free \
-  outputs/20260424_openai_small_models_4way \
-  outputs/20260509_frontier_latest_202605 \
-  --exclude-models kimi_k2_6 mimo_v2_5_pro k_exaone_236b_a23b \
-  --output outputs/merged_report.html
+uv run judge-eval run        configs/examples/frontier_latest_202605.yaml
+uv run judge-eval metrics    outputs/<output_dir>
+uv run judge-eval report     outputs/<output_dir>
 ```
 
-## How Sample Counts Work
+여러 실험을 하나의 리포트로 합치기:
 
-이 프로젝트에는 서로 다른 세 가지 개수가 있습니다.
+```bash
+uv run judge-eval merge outputs/exp1 outputs/exp2 --output outputs/merged_report.html
+```
 
-1. 원본 질문 row 수
-2. `prepare-data` 이후의 normalized sample 수
-3. `run`에서 실제로 평가되는 evaluation row 수
-
-EVOUNA 원본 JSON은 질문 1개(row)마다 여러 candidate answer를 함께 담고 있습니다. 예를 들어 질문 1개 안에 `answer_fid`, `answer_gpt35`, `answer_chatgpt`, `answer_gpt4`, `answer_newbing`가 같이 들어 있습니다.
-
-`prepare-data`는 질문 row를 answer source별 평가 단위로 펼칩니다. 그래서 질문 1개는 최대 5개의 normalized sample이 됩니다.
-
-예를 들어:
-
-- 질문 row 1개
-- 유효한 answer source가 5개
-
-이면 `prepare-data` 결과는 normalized sample 5개입니다.
-
-따라서 config의 `datasets[].sampling.sample_size`는 "질문 몇 개를 뽑을지"가 아니라, 이렇게 펼쳐진 뒤의 normalized sample을 몇 개 남길지 지정하는 값입니다.
-
-예를 들어:
-
-- `evouna_tq`에서 `sample_size: 500`
-- `evouna_nq`에서 `sample_size: 500`
-
-이면 `run`에 들어가는 기본 입력은 질문 1000개가 아니라 normalized sample 1000개입니다.
-
-여기서 끝이 아닙니다. `run`은 normalized sample 1개를 다시 여러 evaluation row로 복제합니다.
-
-- `base`: 1개
-- `prompt_sensitivity`: prompt template 수만큼 추가
-- `reference_order_sensitivity`: golden answer alias가 여러 개면 최대 3개 추가
-- `dummy_answer_test`: 5개 추가
-
-기본 예시 설정처럼 prompt template이 3개이고, variant 옵션이 모두 켜져 있으면 normalized sample 1개는 보통 9개 이상으로 늘어납니다.
-
-- 최소: `1(base) + 3(prompt) + 5(dummy) = 9`
-- alias reorder가 가능한 샘플은 여기에 `reference_order`가 1~3개 더 붙음
-
-그래서:
-
-- `sample_size: 500 + 500 = 1000`
-
-으로 설정해도, `run` 진행 표시에는 약 10500개의 samples가 잡힐 수 있습니다. 이 수치는 질문 row 수가 아니라, variant까지 확장된 실제 evaluation row 수입니다.
-
-실제 모델 호출 수는 여기에 judge model 수가 다시 곱해집니다.
-
-- `실제 호출 수 = evaluation row 수 × judge model 수`
-
-When `telemetry.enabled: true`, the runner ensures the Arize project via `ax` and exports OpenTelemetry spans to the configured Arize OTLP endpoint. The `metrics` command also materializes `arize_metrics_dataset.parquet` and syncs judge-level summary metrics to the Arize dataset named `meta-judge-eval` via `ax datasets create/append`.
-
-## Resume vs Retry
-
-- `run --resume`: raw에 아직 없는 `unit_key`만 채운다.
-- `retry-failures`: 현재 raw의 최종 상태가 `error` 또는 `invalid`인 `unit_key`만 다시 실행한다.
-
-둘 다 `raw_predictions.jsonl`은 append-only로 유지하고, `parsed_predictions.parquet`은 전체 raw에서 `unit_key`별 마지막 레코드를 기준으로 다시 생성한다.
+벤치마크 실행을 위한 세부 내용은 [guide.md](guide.md)를 참고하세요.
