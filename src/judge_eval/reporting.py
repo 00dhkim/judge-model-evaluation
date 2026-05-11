@@ -1333,8 +1333,12 @@ def generate_merged_report(
     bar_colors = [_model_color(model) for model in best_per_model["judge_model"].tolist()]
 
     plots["scotts_pi"] = _plot_bar(labels_best, best_per_model["scotts_pi"].tolist(), "Scott's π", "Scott's π", bar_colors, vline=0.8)
-    plots["percent_agreement"] = _plot_bar(labels_best, best_per_model["percent_agreement"].tolist(), "Percent Agreement", "Agreement", bar_colors)
-    plots["f1"] = _plot_bar(labels_best, best_per_model["f1"].tolist(), "F1", "F1", bar_colors)
+    def _top10_vline(col: str) -> float | None:
+        vals = best_per_model[col].sort_values(ascending=False).tolist()
+        return vals[9] if len(vals) >= 10 else None
+
+    plots["percent_agreement"] = _plot_bar(labels_best, best_per_model["percent_agreement"].tolist(), "Percent Agreement", "Agreement", bar_colors, vline=_top10_vline("percent_agreement"))
+    plots["f1"] = _plot_bar(labels_best, best_per_model["f1"].tolist(), "F1", "F1", bar_colors, vline=_top10_vline("f1"))
     plots["fpr_fnr"] = _plot_grouped_bar(
         labels_best,
         {"FPR": best_per_model["fpr"].tolist(), "FNR": best_per_model["fnr"].tolist()},
@@ -1499,7 +1503,8 @@ def generate_report(output_dir: Path) -> Path:
         labels = _model_prompt_labels(metrics, style="compact")
 
         plots["scotts_pi"] = _plot_bar(labels, metrics["scotts_pi"].tolist(), "Scott's π by Judge / Prompt", "Scott's π", "#34A853", vline=0.8)
-        plots["percent_agreement"] = _plot_bar(labels, metrics["percent_agreement"].tolist(), "Percent Agreement by Judge / Prompt", "Agreement", "#4C8BF5")
+        pa_vals = sorted(metrics["percent_agreement"].tolist(), reverse=True)
+        plots["percent_agreement"] = _plot_bar(labels, metrics["percent_agreement"].tolist(), "Percent Agreement by Judge / Prompt", "Agreement", "#4C8BF5", vline=pa_vals[9] if len(pa_vals) >= 10 else None)
         plots["score_gap"] = _plot_bar(
             labels,
             metrics["score_delta"].tolist(),
