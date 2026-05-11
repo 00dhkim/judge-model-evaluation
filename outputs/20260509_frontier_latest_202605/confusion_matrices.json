@@ -80,30 +80,6 @@
     "fn":71
   },
   {
-    "judge_model":"k_exaone_236b_a23b",
-    "prompt_template":"minimal",
-    "tp":353,
-    "fp":14,
-    "tn":61,
-    "fn":31
-  },
-  {
-    "judge_model":"kimi_k2_6",
-    "prompt_template":"minimal",
-    "tp":153,
-    "fp":1,
-    "tn":14,
-    "fn":0
-  },
-  {
-    "judge_model":"mimo_v2_5_pro",
-    "prompt_template":"minimal",
-    "tp":112,
-    "fp":1,
-    "tn":10,
-    "fn":2
-  },
-  {
     "judge_model":"nemotron_3_super",
     "prompt_template":"minimal",
     "tp":846,
