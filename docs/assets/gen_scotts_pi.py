@@ -48,7 +48,7 @@ for bar, val in zip(bars, values):
 ax.axvline(0.8, color="#888", linewidth=1, linestyle="--", alpha=0.5)
 ax.set_xlim(0, 1.02)
 ax.set_xlabel("Scott's π", fontsize=12)
-ax.set_title("Scott's π — 모델별 최고 성능", fontsize=14, fontweight="bold", pad=12)
+ax.set_title("Scott's π", fontsize=14, fontweight="bold", pad=12)
 ax.tick_params(axis="y", labelsize=10)
 ax.tick_params(axis="x", labelsize=10)
 ax.spines["top"].set_visible(False)
