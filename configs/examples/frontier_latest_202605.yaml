@@ -51,7 +51,7 @@ judge_models:
     model: google/gemini-3.1-pro-preview
     endpoint: https://openrouter.ai/api/v1/chat/completions
     api_key_env: OPENROUTER_API_KEY
-    max_tokens: 512
+    max_tokens: 2048
 
   # Price: $0.50/M input, $3/M output; estimated run cost: $0.223883.
   - name: gemini_3_flash
@@ -116,7 +116,7 @@ judge_models:
     model: openai/gpt-oss-120b
     endpoint: https://openrouter.ai/api/v1/chat/completions
     api_key_env: OPENROUTER_API_KEY
-    max_tokens: 512
+    max_tokens: 2048
 
   # Price: $1/M input, $3/M output; estimated run cost: $0.322165.
   # - name: mimo_v2_5_pro
@@ -132,7 +132,7 @@ judge_models:
     model: z-ai/glm-5.1
     endpoint: https://openrouter.ai/api/v1/chat/completions
     api_key_env: OPENROUTER_API_KEY
-    max_tokens: 512
+    max_tokens: 2048
 
   # Price: $0.09/M input, $0.45/M output; estimated run cost: $0.036531.
   - name: nemotron_3_super

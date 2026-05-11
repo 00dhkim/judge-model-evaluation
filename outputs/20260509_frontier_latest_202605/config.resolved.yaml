@@ -38,7 +38,7 @@ judge_models:
   model: google/gemini-3.1-pro-preview
   endpoint: https://openrouter.ai/api/v1/chat/completions
   api_key_env: OPENROUTER_API_KEY
-  max_tokens: 512
+  max_tokens: 2048
 - name: gemini_3_flash
   provider: openai_compatible
   model: google/gemini-3-flash-preview
@@ -80,13 +80,13 @@ judge_models:
   model: openai/gpt-oss-120b
   endpoint: https://openrouter.ai/api/v1/chat/completions
   api_key_env: OPENROUTER_API_KEY
-  max_tokens: 512
+  max_tokens: 2048
 - name: glm_5_1
   provider: openai_compatible
   model: z-ai/glm-5.1
   endpoint: https://openrouter.ai/api/v1/chat/completions
   api_key_env: OPENROUTER_API_KEY
-  max_tokens: 512
+  max_tokens: 2048
 - name: nemotron_3_super
   provider: openai_compatible
   model: nvidia/nemotron-3-super-120b-a12b

@@ -20,13 +20,13 @@
     "prompt_template":"minimal",
     "tp":873,
     "fp":26,
-    "tn":227,
+    "tn":228,
     "fn":73
   },
   {
     "judge_model":"deepseek_v4_pro",
     "prompt_template":"minimal",
-    "tp":871,
+    "tp":874,
     "fp":14,
     "tn":240,
     "fn":72
@@ -34,10 +34,10 @@
   {
     "judge_model":"gemini_3_1_pro",
     "prompt_template":"minimal",
-    "tp":908,
-    "fp":20,
-    "tn":223,
-    "fn":30
+    "tp":913,
+    "fp":25,
+    "tn":229,
+    "fn":33
   },
   {
     "judge_model":"gemini_3_flash",
@@ -50,25 +50,25 @@
   {
     "judge_model":"glm_5_1",
     "prompt_template":"minimal",
-    "tp":902,
-    "fp":22,
-    "tn":226,
-    "fn":36
+    "tp":905,
+    "fp":25,
+    "tn":229,
+    "fn":41
   },
   {
     "judge_model":"gpt_5_5",
     "prompt_template":"minimal",
-    "tp":903,
+    "tp":904,
     "fp":20,
     "tn":234,
-    "fn":41
+    "fn":42
   },
   {
     "judge_model":"gpt_oss_120b",
     "prompt_template":"minimal",
     "tp":839,
     "fp":17,
-    "tn":236,
+    "tn":237,
     "fn":107
   },
   {
@@ -108,7 +108,7 @@
     "prompt_template":"minimal",
     "tp":846,
     "fp":31,
-    "tn":222,
+    "tn":223,
     "fn":100
   },
   {
