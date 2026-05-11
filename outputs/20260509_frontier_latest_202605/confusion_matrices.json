@@ -18,26 +18,26 @@
   {
     "judge_model":"deepseek_v4_flash",
     "prompt_template":"minimal",
-    "tp":872,
+    "tp":873,
     "fp":26,
-    "tn":225,
-    "fn":70
+    "tn":227,
+    "fn":73
   },
   {
     "judge_model":"deepseek_v4_pro",
     "prompt_template":"minimal",
     "tp":871,
-    "fp":13,
-    "tn":239,
-    "fn":70
+    "fp":14,
+    "tn":240,
+    "fn":72
   },
   {
     "judge_model":"gemini_3_1_pro",
     "prompt_template":"minimal",
-    "tp":906,
+    "tp":908,
     "fp":20,
-    "tn":222,
-    "fn":26
+    "tn":223,
+    "fn":30
   },
   {
     "judge_model":"gemini_3_flash",
@@ -50,23 +50,23 @@
   {
     "judge_model":"glm_5_1",
     "prompt_template":"minimal",
-    "tp":899,
-    "fp":20,
-    "tn":222,
-    "fn":31
+    "tp":902,
+    "fp":22,
+    "tn":226,
+    "fn":36
   },
   {
     "judge_model":"gpt_5_5",
     "prompt_template":"minimal",
     "tp":903,
     "fp":20,
-    "tn":233,
-    "fn":40
+    "tn":234,
+    "fn":41
   },
   {
     "judge_model":"gpt_oss_120b",
     "prompt_template":"minimal",
-    "tp":838,
+    "tp":839,
     "fp":17,
     "tn":236,
     "fn":107
@@ -106,9 +106,9 @@
   {
     "judge_model":"nemotron_3_super",
     "prompt_template":"minimal",
-    "tp":843,
-    "fp":30,
-    "tn":221,
+    "tp":846,
+    "fp":31,
+    "tn":222,
     "fn":100
   },
   {

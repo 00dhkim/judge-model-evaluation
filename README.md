@@ -46,7 +46,6 @@ uv run judge-eval merge \
 # --exclude-models: 특정 judge 모델을 리포트에서 제외한다 (parse 실패가 많거나 비교 대상에서 뺄 때).
 # 모델 이름은 metrics_overall.csv의 judge_model 컬럼 값과 일치해야 한다.
 uv run judge-eval merge \
-  outputs/20260421_gemma4_v1 \
   outputs/20260422_gemma_hosted_4way_free \
   outputs/20260423_cerebras_hosted_2way_free \
   outputs/20260424_openai_small_models_4way \
