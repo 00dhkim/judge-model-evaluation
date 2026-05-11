@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).parents[2] / "src"))
 import base64
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib import font_manager
 from judge_eval.reporting import _model_color, _fig_to_base64
 
 DIRS = [
@@ -17,8 +18,22 @@ DIRS = [
 ]
 EXCLUDE = {"kimi_k2_6", "mimo_v2_5_pro", "k_exaone_236b_a23b"}
 OUT = Path(__file__).parent / "scotts_pi.png"
+SUBTITLE = "우연 일치를 보정한 model-human 일치도"
+
+
+def set_korean_font() -> None:
+    for font_path in [
+        Path.home() / ".local/share/fonts/malgun.ttf",
+        Path.home() / ".local/share/fonts/malgunbd.ttf",
+    ]:
+        if font_path.exists():
+            font_manager.fontManager.addfont(str(font_path))
+            plt.rcParams["font.family"] = font_manager.FontProperties(fname=str(font_path)).get_name()
+            return
 
 dfs = []
+set_korean_font()
+
 for d in DIRS:
     p = Path(d) / "metrics_overall.csv"
     if p.exists():
@@ -48,7 +63,17 @@ for bar, val in zip(bars, values):
 ax.axvline(0.8, color="#888", linewidth=1, linestyle="--", alpha=0.5)
 ax.set_xlim(0, 1.02)
 ax.set_xlabel("Scott's π", fontsize=12)
-ax.set_title("Scott's π", fontsize=14, fontweight="bold", pad=12)
+ax.set_title("Scott's π", fontsize=14, fontweight="bold", pad=26)
+ax.text(
+    0.5,
+    1.01,
+    SUBTITLE,
+    transform=ax.transAxes,
+    ha="center",
+    va="bottom",
+    fontsize=11,
+    color="#555555",
+)
 ax.tick_params(axis="y", labelsize=10)
 ax.tick_params(axis="x", labelsize=10)
 ax.spines["top"].set_visible(False)
