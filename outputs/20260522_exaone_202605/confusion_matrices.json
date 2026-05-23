@@ -1,0 +1,10 @@
+[
+  {
+    "judge_model":"k_exaone_236b_a23b",
+    "prompt_template":"minimal",
+    "tp":820,
+    "fp":46,
+    "tn":201,
+    "fn":121
+  }
+]

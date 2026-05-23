@@ -1,0 +1,9 @@
+ranking_name,judge_model,prompt_template,rank,metric_column,metric_value
+primary_scotts_pi,k_exaone_236b_a23b,minimal,1,scotts_pi,0.614084263209954
+percent_agreement,k_exaone_236b_a23b,minimal,1,percent_agreement,0.8594276094276094
+absolute_score_gap,k_exaone_236b_a23b,minimal,1,score_delta,0.06313131313131315
+false_positive_rate,k_exaone_236b_a23b,minimal,1,fpr,0.1862348178137652
+false_negative_rate,k_exaone_236b_a23b,minimal,1,fnr,0.12858660998937302
+precision,k_exaone_236b_a23b,minimal,1,precision,0.9468822170900693
+recall,k_exaone_236b_a23b,minimal,1,recall,0.871413390010627
+f1,k_exaone_236b_a23b,minimal,1,f1,0.9075816270060874
