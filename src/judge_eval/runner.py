@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import subprocess
+import threading
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
@@ -110,6 +112,22 @@ def failed_unit_keys_from_raw_jsonl(path: Path, statuses: set[str] | None = None
     return set(failed["unit_key"].dropna().astype(str).tolist())
 
 
+class _LockedHandle:
+    """Thread-safe wrapper for file handle writes."""
+
+    def __init__(self, handle: Any, lock: threading.Lock) -> None:
+        self._handle = handle
+        self._lock = lock
+
+    def write(self, data: str) -> None:
+        with self._lock:
+            self._handle.write(data)
+            self._handle.flush()
+
+    def flush(self) -> None:
+        pass
+
+
 def git_commit() -> str:
     try:
         result = subprocess.run(
@@ -145,34 +163,57 @@ def run_predictions(
         dataset_name=config.telemetry.dataset_name,
     )
     evaluation_rows = _build_evaluation_rows(config, normalized_samples)
+    work_units: list[tuple[dict[str, Any], Any, str, str]] = []
+    for sample in evaluation_rows:
+        for model in config.judge_models:
+            model_family = model.metadata.get("model_family", model.provider)
+            unit_key = stable_hash(
+                [sample["sample_id"], model.name, sample["prompt_template"], sample["variant_type"], sample["variant_id"]]
+            )
+            if only_unit_keys is not None and unit_key not in only_unit_keys:
+                continue
+            if resume and unit_key in finished:
+                continue
+            work_units.append((sample, model, unit_key, model_family))
+
+    workers = config.evaluation.workers
+
     if not raw_predictions_path.exists():
         raw_predictions_path.touch()
     with raw_predictions_path.open("a", encoding="utf-8") as handle:
+        write_lock = threading.Lock()
+        locked_handle = _LockedHandle(handle, write_lock)
+
+        def _run_unit(args: tuple[dict[str, Any], Any, str, str]) -> dict[str, Any]:
+            sample, model, unit_key, model_family = args
+            return _run_single_attempt(
+                config=config,
+                sample=sample,
+                model_family=model_family,
+                model_name=model.name,
+                provider=model.provider,
+                prompt_template=sample["prompt_template"],
+                config_hash_value=config_hash_value,
+                dataset_hash=dataset_hash,
+                unit_key=unit_key,
+                raw_handle=locked_handle,
+                telemetry=telemetry,
+            )
+
         try:
-            for sample in tqdm(evaluation_rows, desc="Evaluating", unit="sample"):
-                for model in config.judge_models:
-                    model_family = model.metadata.get("model_family", model.provider)
-                    unit_key = stable_hash(
-                        [sample["sample_id"], model.name, sample["prompt_template"], sample["variant_type"], sample["variant_id"]]
-                    )
-                    if only_unit_keys is not None and unit_key not in only_unit_keys:
-                        continue
-                    if resume and unit_key in finished:
-                        continue
-                    final_record = _run_single_attempt(
-                        config=config,
-                        sample=sample,
-                        model_family=model_family,
-                        model_name=model.name,
-                        provider=model.provider,
-                        prompt_template=sample["prompt_template"],
-                        config_hash_value=config_hash_value,
-                        dataset_hash=dataset_hash,
-                        unit_key=unit_key,
-                        raw_handle=handle,
-                        telemetry=telemetry,
-                    )
-                    parsed_rows.append(final_record)
+            if workers <= 1:
+                for unit in tqdm(work_units, desc="Evaluating", unit="sample"):
+                    parsed_rows.append(_run_unit(unit))
+            else:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+                    futures = {executor.submit(_run_unit, unit): unit for unit in work_units}
+                    for future in tqdm(
+                        concurrent.futures.as_completed(futures),
+                        total=len(futures),
+                        desc=f"Evaluating (workers={workers})",
+                        unit="sample",
+                    ):
+                        parsed_rows.append(future.result())
         finally:
             telemetry.shutdown()
     write_telemetry_manifest(output_dir / "telemetry_manifest.json", telemetry_manifest(telemetry))

@@ -167,12 +167,24 @@ def _call_chat_completion_provider(model: ModelConfig, prompt: str) -> ProviderR
         api_key = os.environ.get(model.api_key_env)
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
+    messages: list[dict[str, str]] = []
+    if model.system_prompt:
+        messages.append({"role": "system", "content": model.system_prompt})
+    messages.append({"role": "user", "content": prompt})
     payload: dict[str, Any] = {
         "model": model.model or model.model_path or model.name,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": messages,
     }
     if model.temperature is not None:
         payload["temperature"] = model.temperature
+    if model.top_p is not None:
+        payload["top_p"] = model.top_p
+    if model.presence_penalty is not None:
+        payload["presence_penalty"] = model.presence_penalty
+    if model.frequency_penalty is not None:
+        payload["frequency_penalty"] = model.frequency_penalty
+    if model.reasoning_effort is not None:
+        payload["reasoning_effort"] = model.reasoning_effort
     if _uses_openai_chat_completions_contract(model.endpoint):
         payload["max_completion_tokens"] = model.max_tokens
     else:

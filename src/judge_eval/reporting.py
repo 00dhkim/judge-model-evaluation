@@ -1248,11 +1248,17 @@ def _hide_prompt_template_labels(metrics: pd.DataFrame) -> bool:
     return prompts == ["minimal"]
 
 
+def _display_model_name(model: str) -> str:
+    if model.endswith("_tuned"):
+        return model[: -len("_tuned")] + " (optimized)"
+    return model
+
+
 def _model_prompt_labels(metrics: pd.DataFrame, *, style: str) -> list[str]:
     hide_prompt = _hide_prompt_template_labels(metrics)
     labels: list[str] = []
     for row in metrics[["judge_model", "prompt_template"]].fillna("").astype(str).itertuples(index=False):
-        model, prompt = row
+        model, prompt = _display_model_name(row[0]), row[1]
         if hide_prompt or not prompt:
             labels.append(model)
         elif style == "newline":

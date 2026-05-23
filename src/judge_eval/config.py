@@ -45,7 +45,12 @@ class ModelConfig(BaseModel):
     endpoint: str | None = None
     api_key_env: str | None = None
     temperature: float | None = None
+    top_p: float | None = None
+    presence_penalty: float | None = None
+    frequency_penalty: float | None = None
+    reasoning_effort: str | None = None
     max_tokens: int = 256
+    system_prompt: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
@@ -71,6 +76,7 @@ class EvaluationConfig(BaseModel):
     enable_prompt_sensitivity: bool = True
     enable_reference_order_sensitivity: bool = True
     enable_dummy_answer_test: bool = True
+    workers: int = 1
 
     @model_validator(mode="after")
     def validate_templates(self) -> "EvaluationConfig":
