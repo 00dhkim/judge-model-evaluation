@@ -1,0 +1,9 @@
+ranking_name,judge_model,prompt_template,rank,metric_column,metric_value
+primary_scotts_pi,solar_pro_3_tuned,guideline_with_examples,1,scotts_pi,0.6991462563335529
+percent_agreement,solar_pro_3_tuned,guideline_with_examples,1,percent_agreement,0.8861720067453626
+absolute_score_gap,solar_pro_3_tuned,guideline_with_examples,1,score_delta,0.0902192242833052
+false_positive_rate,solar_pro_3_tuned,guideline_with_examples,1,fpr,0.05668016194331984
+false_negative_rate,solar_pro_3_tuned,guideline_with_examples,1,fnr,0.1288604898828541
+precision,solar_pro_3_tuned,guideline_with_examples,1,precision,0.9831730769230769
+recall,solar_pro_3_tuned,guideline_with_examples,1,recall,0.8711395101171459
+f1,solar_pro_3_tuned,guideline_with_examples,1,f1,0.9237718802936193

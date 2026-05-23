@@ -1,0 +1,2 @@
+judge_model,prompt_template,judge_score,human_score,score_delta,fpr,fnr
+k_exaone_236b_a23b_tuned,guideline_with_examples,0.6778523489932886,0.7894295302013423,-0.11157718120805371,0.027888446215139442,0.1487778958554729

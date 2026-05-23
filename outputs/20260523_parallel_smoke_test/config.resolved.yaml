@@ -1,0 +1,32 @@
+experiment_name: parallel_smoke_test
+datasets:
+- name: evouna_tq
+  path: data/EVOUNA/TQ.json
+  sampling:
+    sample_size: 20
+    seed: 42
+filter:
+  improper: false
+  exclude_non_boolean_labels: true
+  exclude_empty_candidate_answers: true
+judge_models:
+- name: dummy_perfect
+  provider: dummy
+  metadata:
+    dummy_strategy: perfect
+evaluation:
+  prompt_templates:
+  - guideline_with_examples
+  retry_count: 0
+  invalid_output_policy: store_invalid
+  bootstrap_iterations: 10
+  enable_prompt_sensitivity: false
+  enable_reference_order_sensitivity: false
+  enable_dummy_answer_test: false
+  workers: 5
+output:
+  experiment_name: parallel_smoke_test
+  save_raw_predictions: true
+  save_report: false
+telemetry:
+  enabled: false

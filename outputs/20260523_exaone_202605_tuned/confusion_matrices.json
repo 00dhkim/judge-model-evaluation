@@ -1,0 +1,10 @@
+[
+  {
+    "judge_model":"k_exaone_236b_a23b_tuned",
+    "prompt_template":"guideline_with_examples",
+    "tp":801,
+    "fp":7,
+    "tn":244,
+    "fn":140
+  }
+]

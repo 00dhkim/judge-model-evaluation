@@ -1,0 +1,2 @@
+judge_model,metric,ci_low,ci_high,iterations
+k_exaone_236b_a23b_tuned,scotts_pi,0.6425662093817189,0.7365516507491393,200

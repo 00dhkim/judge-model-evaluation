@@ -1,0 +1,2 @@
+judge_model,metric,ci_low,ci_high,iterations
+solar_pro_3_tuned,scotts_pi,0.6540437048774762,0.7432564193360817,200

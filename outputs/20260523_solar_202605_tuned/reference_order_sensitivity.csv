@@ -1,0 +1,2 @@
+judge_model,reference_order_consistency,label_flip_rate_by_reference_order,eligible_sample_groups,skipped_single_alias_groups,coverage,rows,valid_rows
+solar_pro_3_tuned,,,772,428,0.6433333333333333,0,0

@@ -1,0 +1,10 @@
+[
+  {
+    "judge_model":"solar_pro_3_tuned",
+    "prompt_template":"guideline_with_examples",
+    "tp":818,
+    "fp":14,
+    "tn":233,
+    "fn":121
+  }
+]

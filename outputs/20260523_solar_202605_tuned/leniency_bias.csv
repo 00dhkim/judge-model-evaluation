@@ -1,0 +1,2 @@
+judge_model,prompt_template,judge_score,human_score,score_delta,fpr,fnr
+solar_pro_3_tuned,guideline_with_examples,0.7015177065767285,0.7917369308600337,-0.0902192242833052,0.05668016194331984,0.1288604898828541
