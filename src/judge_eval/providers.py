@@ -197,10 +197,10 @@ def _call_chat_completion_provider(model: ModelConfig, prompt: str) -> ProviderR
                 time.sleep(_retry_delay(attempt))
                 continue
             raise ProviderError(f"provider request failed: {exc}") from exc
-        if response.status_code != 429:
+        if response.status_code not in (429, 500, 502, 503, 504):
             break
         if attempt == _RATE_LIMIT_MAX_RETRIES:
-            raise ProviderError(f"rate limit exceeded after {_RATE_LIMIT_MAX_RETRIES} retries: {response.text}")
+            raise ProviderError(f"provider call failed after {_RATE_LIMIT_MAX_RETRIES} retries: {response.status_code} {response.text}")
         time.sleep(_retry_delay(attempt, response.headers.get("Retry-After")))
     if response.status_code >= 400:
         raise ProviderError(f"provider call failed: {response.status_code} {response.text}")
@@ -241,10 +241,10 @@ def _call_custom_http_provider(model: ModelConfig, prompt: str) -> ProviderRespo
                 time.sleep(_retry_delay(attempt))
                 continue
             raise ProviderError(f"provider request failed: {exc}") from exc
-        if response.status_code != 429:
+        if response.status_code not in (429, 500, 502, 503, 504):
             break
         if attempt == _RATE_LIMIT_MAX_RETRIES:
-            raise ProviderError(f"rate limit exceeded after {_RATE_LIMIT_MAX_RETRIES} retries: {response.text}")
+            raise ProviderError(f"provider call failed after {_RATE_LIMIT_MAX_RETRIES} retries: {response.status_code} {response.text}")
         time.sleep(_retry_delay(attempt, response.headers.get("Retry-After")))
     if response.status_code >= 400:
         raise ProviderError(f"provider call failed: {response.status_code} {response.text}")
