@@ -49,6 +49,7 @@ class ModelConfig(BaseModel):
     presence_penalty: float | None = None
     frequency_penalty: float | None = None
     reasoning_effort: str | None = None
+    reasoning_budget: int | None = None
     max_tokens: int = 256
     system_prompt: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)

@@ -45,6 +45,28 @@ SOLAR_CONFIG = ModelConfig(
     max_tokens=16384,
 )
 
+EXAONE_CONFIG = ModelConfig(
+    name="k_exaone_236b_a23b_tuned",
+    provider="openai_compatible",
+    model="LGAI-EXAONE/K-EXAONE-236B-A23B",
+    endpoint="https://api.friendli.ai/serverless/v1/chat/completions",
+    api_key_env="FRIENDLI_API_KEY",
+    temperature=0.7,
+    top_p=0.95,
+    max_tokens=4096,
+    reasoning_budget=2048,
+)
+
+JUDGE_CONFIGS = {
+    "solar": SOLAR_CONFIG,
+    "exaone": EXAONE_CONFIG,
+}
+
+GT_PARQUETS = {
+    "solar": "outputs/20260523_solar_202605_tuned/normalized_samples.parquet",
+    "exaone": "outputs/20260523_exaone_202605_tuned/normalized_samples.parquet",
+}
+
 # ---------------------------------------------------------------------------
 # Prompt constants
 # ---------------------------------------------------------------------------
@@ -288,17 +310,18 @@ def run_sample(spec: MethodSpec, sample: dict, model: ModelConfig) -> dict:
         order_b = rng_b.sample(aliases, len(aliases)) if aliases else aliases
 
         prompt_a = build_prompt_for_method(sample, spec, alias_order=order_a)
-        resp_a = call_provider(effective_model, prompt_a)
-        total_latency_ms += resp_a.latency_ms
-        total_cost += resp_a.estimated_cost or 0.0
-        n_calls += 1
-        label_a = parse_model_output(resp_a.raw_output)["parsed_label"]
-
         prompt_b = build_prompt_for_method(sample, spec, alias_order=order_b)
-        resp_b = call_provider(effective_model, prompt_b)
-        total_latency_ms += resp_b.latency_ms
-        total_cost += resp_b.estimated_cost or 0.0
-        n_calls += 1
+
+        with ThreadPoolExecutor(max_workers=2) as ab_exec:
+            fut_a = ab_exec.submit(call_provider, effective_model, prompt_a)
+            fut_b = ab_exec.submit(call_provider, effective_model, prompt_b)
+            resp_a = fut_a.result()
+            resp_b = fut_b.result()
+
+        total_latency_ms += resp_a.latency_ms + resp_b.latency_ms
+        total_cost += (resp_a.estimated_cost or 0.0) + (resp_b.estimated_cost or 0.0)
+        n_calls += 2
+        label_a = parse_model_output(resp_a.raw_output)["parsed_label"]
         label_b = parse_model_output(resp_b.raw_output)["parsed_label"]
 
         if label_a == label_b and label_a is not None:
@@ -328,15 +351,22 @@ def run_sample(spec: MethodSpec, sample: dict, model: ModelConfig) -> dict:
         labels: list[bool | None] = []
         confidences: list[float | None] = []
 
-        for _ in range(spec.sc_n):
-            resp = call_provider(effective_model, prompt)
-            total_latency_ms += resp.latency_ms
-            total_cost += resp.estimated_cost or 0.0
+        def _sc_call(_: int):
+            r = call_provider(effective_model, prompt)
+            return r, parse_model_output(r.raw_output)["parsed_label"], (
+                _parse_confidence(r.raw_output) if spec.confidence_abstain else None
+            )
+
+        with ThreadPoolExecutor(max_workers=spec.sc_n) as sc_exec:
+            sc_results = list(sc_exec.map(_sc_call, range(spec.sc_n)))
+
+        for r, lbl, conf in sc_results:
+            total_latency_ms += r.latency_ms
+            total_cost += r.estimated_cost or 0.0
             n_calls += 1
-            parsed = parse_model_output(resp.raw_output)
-            labels.append(parsed["parsed_label"])
+            labels.append(lbl)
             if spec.confidence_abstain:
-                confidences.append(_parse_confidence(resp.raw_output))
+                confidences.append(conf)
 
         if spec.confidence_abstain:
             # apply per-call abstain logic before aggregating
@@ -409,31 +439,50 @@ def run_method(
     method_dir.mkdir(parents=True, exist_ok=True)
     jsonl_path = method_dir / "predictions.jsonl"
 
-    records = samples.to_dict(orient="records")
-    results: list[dict] = []
+    # Resume: load already-completed sample_ids from existing JSONL
+    done_ids: set[str] = set()
+    existing_results: list[dict] = []
+    if jsonl_path.exists():
+        with jsonl_path.open(encoding="utf-8") as fin:
+            for line in fin:
+                line = line.strip()
+                if line:
+                    row = json.loads(line)
+                    done_ids.add(str(row["sample_id"]))
+                    existing_results.append(row)
+        if done_ids:
+            print(f"  [resume] {len(done_ids)} samples already done, skipping", file=sys.stderr)
+
+    records = [r for r in samples.to_dict(orient="records") if str(r["sample_id"]) not in done_ids]
+    results: list[dict] = list(existing_results)
 
     def _worker(sample: dict) -> dict:
         return run_sample(spec, sample, model)
 
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = {executor.submit(_worker, rec): rec for rec in records}
-        if use_tqdm:
-            iterator = tqdm(as_completed(futures), total=len(futures), desc=spec.name, file=sys.stderr)
-        else:
-            print(f"Running {spec.name} ({len(records)} samples)...", file=sys.stderr)
-            iterator = as_completed(futures)
+    import threading
+    _write_lock = threading.Lock()
 
-        for future in iterator:
-            result = future.result()
-            results.append(result)
+    with jsonl_path.open("a", encoding="utf-8") as fout:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {executor.submit(_worker, rec): rec for rec in records}
+            if use_tqdm:
+                iterator = tqdm(as_completed(futures), total=len(futures), desc=spec.name, file=sys.stderr)
+            else:
+                print(f"Running {spec.name} ({len(records)} samples)...", file=sys.stderr)
+                iterator = as_completed(futures)
 
-    # Write JSONL in sample_id order for reproducibility
-    results.sort(key=lambda r: str(r["sample_id"]))
-    with jsonl_path.open("w", encoding="utf-8") as fout:
-        for row in results:
-            # Convert bool/None to JSON-serializable form
-            line = dict(row)
-            fout.write(json.dumps(line, ensure_ascii=False, default=str) + "\n")
+            for future in iterator:
+                try:
+                    result = future.result(timeout=240)
+                except Exception as exc:
+                    # Timed-out or errored worker: skip sample, log to stderr
+                    sample_rec = futures[future]
+                    print(f"\n[WARN] sample {sample_rec.get('sample_id')} failed/timed-out: {exc}", file=sys.stderr)
+                    continue
+                with _write_lock:
+                    fout.write(json.dumps(result, ensure_ascii=False, default=str) + "\n")
+                    fout.flush()
+                results.append(result)
 
     df = pd.DataFrame(results)
     # Merge human_label from samples
@@ -481,8 +530,9 @@ def evaluate(df: pd.DataFrame) -> dict:
 # Sample loading
 # ---------------------------------------------------------------------------
 
-def load_samples(n: int, seed: int = 42) -> pd.DataFrame:
-    parquet_path = "outputs/20260523_solar_202605_tuned/normalized_samples.parquet"
+def load_samples(n: int, seed: int = 42, parquet_path: str | None = None) -> pd.DataFrame:
+    if parquet_path is None:
+        parquet_path = GT_PARQUETS["solar"]
     df = pd.read_parquet(parquet_path)
 
     # Stratified sample by dataset (TQ/NQ 50/50)
@@ -510,6 +560,7 @@ def main() -> None:
     parser.add_argument("--mode", choices=["sanity", "screening", "final"], required=True)
     parser.add_argument("--n-samples", type=int, default=300)
     parser.add_argument("--workers", type=int, default=5)
+    parser.add_argument("--judge", choices=["solar", "exaone"], default="solar")
     parser.add_argument(
         "--methods",
         nargs="*",
@@ -517,18 +568,22 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    judge_config = JUDGE_CONFIGS[args.judge]
+    gt_parquet = GT_PARQUETS[args.judge]
+    judge_tag = "" if args.judge == "solar" else f"_{args.judge}"
+
     if args.mode == "sanity":
         n_samples = 3
         method_names = ["m1_sc_n5", "m2_alias_enum"]
-        output_dir = Path("outputs/optim_screening")
+        output_dir = Path(f"outputs/optim_screening{judge_tag}")
     elif args.mode == "screening":
         n_samples = args.n_samples
         method_names = args.methods or [s.name for s in ALL_METHODS]
-        output_dir = Path("outputs/optim_screening")
+        output_dir = Path(f"outputs/optim_screening{judge_tag}")
     else:  # final
         n_samples = args.n_samples
         method_names = args.methods or [s.name for s in ALL_METHODS]
-        output_dir = Path("outputs/optim_final")
+        output_dir = Path(f"outputs/optim_final{judge_tag}")
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -544,14 +599,14 @@ def main() -> None:
         print("No valid methods to run.", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Mode: {args.mode} | Samples: {n_samples} | Methods: {[s.name for s in specs_to_run]}")
-    samples = load_samples(n_samples)
+    print(f"Mode: {args.mode} | Judge: {args.judge} | Samples: {n_samples} | Methods: {[s.name for s in specs_to_run]}")
+    samples = load_samples(n_samples, parquet_path=gt_parquet)
     print(f"Loaded {len(samples)} samples from {samples['dataset'].value_counts().to_dict()}")
 
     summary_rows: list[dict] = []
     for spec in specs_to_run:
         print(f"\n--- Running {spec.name} ---")
-        df = run_method(spec, samples, SOLAR_CONFIG, workers=args.workers, output_dir=output_dir)
+        df = run_method(spec, samples, judge_config, workers=args.workers, output_dir=output_dir)
         metrics = evaluate(df)
         row = {"method": spec.name, **metrics}
         summary_rows.append(row)

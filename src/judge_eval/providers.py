@@ -185,6 +185,8 @@ def _call_chat_completion_provider(model: ModelConfig, prompt: str) -> ProviderR
         payload["frequency_penalty"] = model.frequency_penalty
     if model.reasoning_effort is not None:
         payload["reasoning_effort"] = model.reasoning_effort
+    if model.reasoning_budget is not None:
+        payload["reasoning_budget"] = model.reasoning_budget
     if _uses_openai_chat_completions_contract(model.endpoint):
         payload["max_completion_tokens"] = model.max_tokens
     else:
