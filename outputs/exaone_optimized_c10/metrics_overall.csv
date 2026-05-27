@@ -1,0 +1,2 @@
+judge_model,prompt_template,judge_score,human_score,score_delta,percent_agreement,scotts_pi,precision,recall,f1,tp,fp,tn,fn,fpr,fnr,invalid_rate,valid_rate,avg_latency_ms,p50_latency_ms,p95_latency_ms,total_estimated_cost
+k_exaone_236b_a23b_optimized,c10_all_lite,0.7658333333333334,0.7883333333333333,-0.022499999999999964,0.9425,0.8340307183483251,0.9771490750816104,0.9492600422832981,0.9630026809651474,898,21,233,48,0.08267716535433071,0.0507399577167019,0.0,1.0,178475.775,122956.5,437184.79999999976,6.111799999999889

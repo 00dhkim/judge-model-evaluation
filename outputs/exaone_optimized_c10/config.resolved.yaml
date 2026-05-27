@@ -1,0 +1,8 @@
+_method_id: c10_all_lite
+_source_predictions: /home/primi/workspace/judge-model-evaluation/outputs/optim_final_exaone/c10_all_lite/predictions.jsonl
+evaluation:
+  prompt_templates:
+  - c10_all_lite
+experiment_name: exaone_optimized_c10
+judge_models:
+- name: k_exaone_236b_a23b_optimized

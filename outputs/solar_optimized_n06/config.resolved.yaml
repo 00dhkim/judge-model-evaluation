@@ -1,0 +1,8 @@
+_method_id: n06_sc5_ext_confidence
+_source_predictions: /home/primi/workspace/judge-model-evaluation/outputs/optim_final/n06_sc5_ext_confidence/predictions.jsonl
+evaluation:
+  prompt_templates:
+  - n06_sc5_ext_confidence
+experiment_name: solar_optimized_n06
+judge_models:
+- name: solar_pro_3_optimized
