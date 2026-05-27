@@ -1,7 +1,7 @@
 """Build merged_report_optimized.html using the best optimized methods.
 
-Replaces the prior "tuned" entries (guideline_with_examples) for
-solar_pro_3 and k_exaone_236b_a23b with the best optimized runs:
+Compares the raw, unoptimized baseline entries for solar_pro_3 and
+k_exaone_236b_a23b against the best optimized runs:
   - Solar:  n06_sc5_ext_confidence  (sc5 + ext_fewshot + confidence_abstain)
   - EXAONE: c10_all_lite             (sc3 + alias_enum + ext_fewshot + confidence)
 
@@ -10,7 +10,8 @@ Steps:
      normalized_samples.parquet (ground truth) of the matching baseline run.
   2. Compute metrics_overall.csv via judge_eval.metrics.compute_metric_result.
   3. Materialize fake "experiment" output dirs.
-  4. Call generate_merged_report() with the 4 frontier dirs + 2 optimized dirs.
+  4. Call generate_merged_report() with frontier dirs, raw EXAONE baseline,
+     and the 2 optimized dirs.
   5. Inject a "Optimization Methods" section listing methods + descriptions.
 """
 
@@ -64,6 +65,20 @@ def _html_table_bold(frame):
 
 
 R._html_table = _html_table_bold
+
+
+# Graph labels should compare model identities only. Prompt/method names remain
+# available in the metric tables, but are intentionally hidden from chart axes.
+def _model_only_labels(metrics: pd.DataFrame, *, style: str) -> list[str]:
+    if "judge_model" not in metrics.columns:
+        return []
+    return [
+        R._display_model_name(model)
+        for model in metrics["judge_model"].fillna("").astype(str).tolist()
+    ]
+
+
+R._model_prompt_labels = _model_only_labels
 
 
 # Plotly charts: wrap matching labels with <b>...</b>
@@ -157,7 +172,8 @@ METHOD_DESCRIPTIONS = {
 MODEL_METHOD_STACK = {
     "solar_pro_3_optimized": {
         "label": "Solar Pro3 (n06_sc5_ext_confidence)",
-        "baseline_pi": 0.6991,
+        "baseline_label": "solar_pro_3 / minimal",
+        "baseline_pi": 0.6185,
         "optimized_pi_expected": 0.8016,
         "stack": [
             "m1_sc (Self-Consistency)",
@@ -168,7 +184,8 @@ MODEL_METHOD_STACK = {
     },
     "k_exaone_236b_a23b_optimized": {
         "label": "K-EXAONE-236B-A23B (c10_all_lite)",
-        "baseline_pi": 0.6845,
+        "baseline_label": "k_exaone_236b_a23b / minimal",
+        "baseline_pi": 0.6141,
         "optimized_pi_expected": 0.8340,
         "stack": [
             "m1_sc (Self-Consistency)",
@@ -280,20 +297,15 @@ merge_dirs = [
     OUT / "20260422_gemma_hosted_4way_free",
     OUT / "20260423_cerebras_hosted_2way_free",
     OUT / "20260424_openai_small_models_4way",
-    OUT / "20260509_frontier_latest_202605",
-    OUT / "20260523_solar_202605_tuned",   # baseline (before)
-    OUT / "20260523_exaone_202605_tuned",  # baseline (before)
+    OUT / "20260509_frontier_latest_202605",  # includes raw solar_pro_3 / minimal
+    OUT / "20260522_exaone_202605",           # raw k_exaone_236b_a23b / minimal
     solar_opt_dir,
     exaone_opt_dir,
 ]
 
-# Exclude un-optimized solar/exaone from the frontier dir so the optimized
-# versions are the primary representatives in the merged charts.
-EXCLUDE_MODELS = {"solar_pro_3", "k_exaone_236b_a23b"}
-
 report_path = OUT / "merged_report_optimized.html"
 print(f"\nGenerating {report_path}...")
-generate_merged_report(merge_dirs, report_path, exclude_models=EXCLUDE_MODELS)
+generate_merged_report(merge_dirs, report_path)
 
 
 # ---- 4. Inject "Optimization Methods" section into HTML ---------------------
@@ -315,7 +327,8 @@ def _methods_section_html() -> str:
           <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:0.5rem">
             <h3 style="margin:0;color:#1a1a2e">{info["label"]}</h3>
             <div style="font-family:monospace;font-size:0.92rem">
-              baseline π <strong>{info["baseline_pi"]:.4f}</strong>
+              baseline <span style="color:#4b5563">({info["baseline_label"]})</span>
+              π <strong>{info["baseline_pi"]:.4f}</strong>
               &nbsp;→&nbsp;
               optimized π <strong style="color:#16a34a">{info["optimized_pi_expected"]:.4f}</strong>
               &nbsp;(<span style="color:#16a34a">+{delta:.4f}</span>)
@@ -338,6 +351,8 @@ def _methods_section_html() -> str:
   <p style="margin-bottom:0.8rem;color:#4b5563">
     이 보고서의 <code>solar_pro_3_optimized</code> 및 <code>k_exaone_236b_a23b_optimized</code> 항목은
     1200샘플(EVOUNA TQ 600 + NQ 600) 평가에서 가장 높은 Scott's π를 기록한 최적 조합입니다.
+    비교 기준선은 <code>solar_pro_3 / minimal</code> 및 <code>k_exaone_236b_a23b / minimal</code>의
+    무최적화 실행 결과입니다.
     상세 실험 로그: <code>experiments/README.md</code>.
   </p>
   {"".join(rows)}
