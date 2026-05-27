@@ -61,10 +61,10 @@ EXAONE에 `<think>...</think>` 또는 명시적 "step 1/2/3" 구조 시스템 �
 
 #### m6 — Few-shot 예시 큐레이션 강화 (Extended Few-shot)
 
-현재 guideline_with_examples 템플릿의 예시 수/품질을 늘림. Mashee 결과: 충분한 ICL 예시 시 exact match 0.879, κ 0.807까지. ICL 단독은 reasoning 대비 효율 낮지만, 현재 우리 케이스의 hard error에 맞춘 hard-negative 예시(별칭 차이, 동의어, 부분 일치, 잘못된 entity) 추가 시 +0.01~0.03 기대.  
+현재 guideline_with_examples 템플릿의 예시 수/품질을 늘림. Mashee 결과: 충분한 ICL 예시 시 exact match 0.879, κ 0.807까지. ICL 단독은 reasoning 대비 효율 낮지만, short-form QA judge에서 자주 헷갈리는 일반 패턴(별칭 차이, 동의어, 부분 일치, 잘못된 entity)을 수동 예시로 명시하면 +0.01~0.03 기대.  
 ([LLMs-as-Judges Survey](https://arxiv.org/html/2412.05579v2))
 
-현재 Solar/EXAONE이 틀린 케이스에서 false positive/negative 각 3개씩 sampling → 예시로 박제. EVOUNA test set 누설 방지 위해 holdout split 분리 필수.
+구현상 extended few-shot 8개는 EVOUNA 실제 오답 케이스에서 샘플링한 항목이 아니라, 일반적인 판정 패턴을 설명하기 위해 수동 작성한 예시다. 코드 기준 해당 8개 golden/candidate 쌍은 EVOUNA TQ/NQ의 실제 평가 행과 정확히 일치하지 않는다. 단, `Paris`, `Tokyo`, `United States`처럼 예시에 쓰인 일부 엔티티 문자열 자체는 EVOUNA에도 등장하므로, test-set에서 추출한 hard-negative라고 주장하지 않는다.
 
 #### m7 — Confidence Calibration + Abstain
 
@@ -142,6 +142,38 @@ EXAONE에 `<think>...</think>` 또는 명시적 "step 1/2/3" 구조 시스템 �
 baseline: Solar Pro3 0.6991
 
 **핵심 결론**: sc5(Self-Consistency) + ext_fewshot(8개 hard-negative 예시) + confidence_abstain 조합(n06)이 π 0.8016으로 최고 성능. gemma-4-26b(0.821) 대비 0.019p 차이.
+
+---
+
+## K-EXAONE Final 실험 결과 (1200샘플)
+
+K-EXAONE-236B-A23B (Friendli 서버리스, reasoning_budget=2048) 기준, 동일 5개 방법을 1200샘플(TQ 600 + NQ 600)로 재실행.
+
+| 순위 | Method | π (1200샘플) | Δ vs baseline | 비고 |
+|------|--------|-------------|---------------|------|
+| 1 | c10_all_lite | **0.8340** | +0.150 | ★★ 목표 상한 초과 |
+| 2 | n05_sc3_shuffle_confidence | 0.7982 | +0.114 | ★★ |
+| 3 | n06_sc5_ext_confidence | 0.7831 | +0.099 | ★★ |
+| 4 | n01_sc5_confidence | 0.7455 | +0.061 | ★ |
+| 5 | m7_confidence_abstain | 0.6807 | -0.004 | baseline 미달 |
+
+★ = gpt-oss-120b(0.724) 초과 / ★★ = 목표 상한 gemma-4-26b(0.821) 초과  
+baseline: K-EXAONE 0.6845
+
+**핵심 결론**: c10_all_lite(sc3 + alias_enum + ext_fewshot + confidence) 조합이 π 0.8340으로 최고 성능. gemma-4-26b(0.821) 목표 상한을 초과. m7(confidence abstain 단독)은 EXAONE에서 역효과(-0.004) — Solar와 달리 confidence 기반 기권 전략이 맞지 않음.
+
+---
+
+## 집계 산출물 원칙
+
+최적화 실험의 원천 자료는 각 메서드 디렉터리의 `predictions.jsonl`이다. `summary.csv` / `summary_final.csv`는 해당 실행에서 돌린 메서드 subset만 담을 수 있으므로, 발표·보고용 전체 리더보드는 전체 디렉터리를 다시 스캔하는 `summary_full.csv`를 기준으로 한다.
+
+```bash
+uv run python scripts/aggregate_optim_results.py --root outputs/optim_final --judge solar
+uv run python scripts/aggregate_optim_results.py --root outputs/optim_final_exaone --judge exaone
+```
+
+위 명령은 하위 `*/predictions.jsonl` 전체를 `normalized_samples.parquet`와 `sample_id`로 병합해 `summary_full.csv`를 재생성하고, 읽은 파일 목록과 sample hash를 `summary_manifest.json`에 기록한다.
 
 ---
 

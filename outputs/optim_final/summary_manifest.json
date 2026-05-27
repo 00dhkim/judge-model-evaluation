@@ -1,0 +1,52 @@
+{
+  "files": [
+    {
+      "method": "c10_all_lite",
+      "missing_label_count": 0,
+      "predictions_path": "outputs/optim_final/c10_all_lite/predictions.jsonl",
+      "row_count": 1200,
+      "unique_sample_count": 1200,
+      "valid_count": 1200
+    },
+    {
+      "method": "m7_confidence_abstain",
+      "missing_label_count": 0,
+      "predictions_path": "outputs/optim_final/m7_confidence_abstain/predictions.jsonl",
+      "row_count": 1200,
+      "unique_sample_count": 1200,
+      "valid_count": 1200
+    },
+    {
+      "method": "n01_sc5_confidence",
+      "missing_label_count": 0,
+      "predictions_path": "outputs/optim_final/n01_sc5_confidence/predictions.jsonl",
+      "row_count": 1200,
+      "unique_sample_count": 1200,
+      "valid_count": 1200
+    },
+    {
+      "method": "n05_sc3_shuffle_confidence",
+      "missing_label_count": 0,
+      "predictions_path": "outputs/optim_final/n05_sc3_shuffle_confidence/predictions.jsonl",
+      "row_count": 1200,
+      "unique_sample_count": 1200,
+      "valid_count": 1200
+    },
+    {
+      "method": "n06_sc5_ext_confidence",
+      "missing_label_count": 0,
+      "predictions_path": "outputs/optim_final/n06_sc5_ext_confidence/predictions.jsonl",
+      "row_count": 1200,
+      "unique_sample_count": 1200,
+      "valid_count": 1200
+    }
+  ],
+  "generated_at": "2026-05-27T11:37:50+00:00",
+  "git_commit": "1f53f52945fb5b04a85e1857d5fef98950e34975",
+  "judge": "solar",
+  "mode": "optim_final",
+  "root": "outputs/optim_final",
+  "sample_hash": "f5cd7e3ceab3b80a5753e626ddd70b9756a2c2850f080368e2cb51bfaaa71574",
+  "sample_source_path": "outputs/20260523_solar_202605_tuned/normalized_samples.parquet",
+  "summary_path": "outputs/optim_final/summary_full.csv"
+}
