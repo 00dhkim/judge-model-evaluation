@@ -20,6 +20,12 @@ Scott's Pi: judge 모델의 판단이 인간 라벨과 얼마나 일치하는지
 
 [평가 결과 전체 리포트](https://htmlpreview.github.io/?https://github.com/00dhkim/judge-model-evaluation/blob/main/outputs/merged_report.html)
 
+### Optimized Result
+
+![Optimized Judge Model Reliability](docs/assets/scotts_pi_optimized.png)
+
+[최적화 포함 전체 리포트](https://htmlpreview.github.io/?https://github.com/00dhkim/judge-model-evaluation/blob/main/outputs/merged_report_optimized.html)
+
 ## 빠른 시작
 
 ```bash
