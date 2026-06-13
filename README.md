@@ -44,3 +44,5 @@ uv run judge-eval merge outputs/exp1 outputs/exp2 --output outputs/merged_report
 ```
 
 벤치마크 실행을 위한 세부 내용은 [guide.md](guide.md)를 참고하세요.
+
+최적화 방법론은 [optimization.md](optimization.md)를 참고하세요.
